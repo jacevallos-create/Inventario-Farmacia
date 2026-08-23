@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .state_api import StateRecordView, SystemStateView
+from .operations_api import ExcelReportView, LotAlertsView, SaleCreateView
 
 
 class HealthView(APIView):
@@ -79,4 +80,7 @@ urlpatterns = [
     path("auth/logout/", LogoutView.as_view(), name="api-logout"),
     path("state/", SystemStateView.as_view(), name="api-state"),
     path("state/<str:resource>/<str:identifier>/", StateRecordView.as_view(), name="api-state-record"),
+    path("sales/", SaleCreateView.as_view(), name="api-sales"),
+    path("lots/alerts/", LotAlertsView.as_view(), name="api-lot-alerts"),
+    path("reports/excel/", ExcelReportView.as_view(), name="api-excel-report"),
 ]

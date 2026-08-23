@@ -1678,37 +1678,37 @@ function Suppliers({ suppliers, setSuppliers }) {
 }
 
 function Sales({ items, setItems, sales, setSales, branch }) {
-  const [form, setForm] = useState(null);
+  const [form, setForm] = useState(null),
+    [saving, setSaving] = useState(false);
   const total = form
     ? Number(form.qty || 0) *
       (items.find((p) => p.id === Number(form.productId))?.sellPrice || 0)
     : 0;
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     const product = items.find((p) => p.id === Number(form.productId)),
       qty = Number(form.qty);
     if (!product || qty < 1) return;
     if (qty > product.stock)
       return alert("No hay stock suficiente para completar la venta.");
-    setItems(
-      items.map((p) =>
-        p.id === product.id ? { ...p, stock: p.stock - qty } : p,
-      ),
-    );
-    setSales([
-      {
-        id: Date.now(),
-        branchId: branch.id,
-        product: product.name,
-        sku: product.sku,
-        qty,
-        total: qty * product.sellPrice,
-        customer: form.customer || "Consumidor final",
-        date: new Date().toLocaleString("es-CO"),
-      },
-      ...sales,
-    ]);
-    setForm(null);
+    setSaving(true);
+    try {
+      const response = await fetch("/api/v1/sales/", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+        body: JSON.stringify({ branchId: branch.id, productId: product.id, qty, customer: form.customer }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "No se pudo registrar la venta.");
+      setItems(items.map((p) => (p.id === product.id ? { ...p, stock: data.stock } : p)));
+      setSales([data.sale, ...sales.filter((sale) => sale.id !== data.sale.id)]);
+      setForm(null);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setSaving(false);
+    }
   };
   const rows = sales.filter((s) => s.branchId === branch.id);
   return (
@@ -1843,7 +1843,9 @@ function Sales({ items, setItems, sales, setSales, branch }) {
               >
                 Cancelar
               </button>
-              <button className="button primary">Confirmar venta</button>
+              <button className="button primary" disabled={saving}>
+                {saving ? "Registrando…" : "Confirmar venta"}
+              </button>
             </footer>
           </form>
         </SimpleModal>
@@ -1852,8 +1854,9 @@ function Sales({ items, setItems, sales, setSales, branch }) {
   );
 }
 
-function Alerts({ items, setItems, branch }) {
+function Alerts({ items, setItems, branch, lotAlerts }) {
   const alerts = items.filter((p) => p.stock <= p.min);
+  const expiring = lotAlerts.filter((lot) => lot.branchId === branch.id);
   const restock = (p) => {
     const qty = Number(
       prompt(
@@ -1873,8 +1876,25 @@ function Alerts({ items, setItems, branch }) {
           <p className="eyebrow">REABASTECIMIENTO</p>
           <h1>Alertas</h1>
           <p>
-            {alerts.length} alertas activas en {branch.name}.
+            {alerts.length + expiring.length} alertas activas en {branch.name}.
           </p>
+        </div>
+      </section>
+      <section className="table-card">
+        <div className="table-title">
+          <div><h3>Lotes y vencimientos</h3><p>Ordenados por fecha para aplicar FEFO.</p></div>
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead><tr><th>Medicamento</th><th>Lote</th><th>Vencimiento</th><th>Unidades</th><th>Estado</th></tr></thead>
+            <tbody>{expiring.map((lot) => (
+              <tr key={lot.id}>
+                <td><b>{lot.product}</b><small>{lot.sku}</small></td>
+                <td>{lot.number}</td><td>{lot.expires}</td><td>{lot.quantity}</td>
+                <td><span className={`status ${lot.status === "EXPIRED" ? "danger" : "warning"}`}>{lot.status === "EXPIRED" ? "Vencido y bloqueado" : "Próximo a vencer"}</span></td>
+              </tr>
+            ))}</tbody>
+          </table>
         </div>
       </section>
       <section className="alert-list">
@@ -2270,10 +2290,14 @@ function Reports({ items, sales, branch }) {
   );
 }
 
-function AdminReports({ branches, inventories, sales, onNotify }) {
+function AdminReports({ branches, inventories, sales, users, onNotify }) {
   const [selected, setSelected] = useState("ALL"),
     [confirmExport, setConfirmExport] = useState(false),
     [exporting, setExporting] = useState(false),
+    [dateFrom, setDateFrom] = useState(""),
+    [dateTo, setDateTo] = useState(""),
+    [selectedUser, setSelectedUser] = useState(""),
+    [movement, setMovement] = useState(""),
     branch = branches.find((b) => b.id === selected),
     items =
       selected === "ALL"
@@ -2285,32 +2309,26 @@ function AdminReports({ branches, inventories, sales, onNotify }) {
   const downloadReport = async () => {
     setExporting(true);
     try {
-      await exportExcel({
-        filename: `reporte-farmacias-${new Date().toISOString().slice(0, 10)}.xlsx`,
-        sheetName: "Resumen",
-        columns: [
-          { header: "Farmacia", key: "farmacia", width: 28 },
-          { header: "Medicamentos", key: "medicamentos", width: 16 },
-          { header: "Unidades", key: "unidades", width: 14 },
-          { header: "Stock crítico", key: "criticos", width: 16 },
-          { header: "Ventas", key: "ventas", width: 18 },
-        ],
-        rows: branches
-          .filter((b) => selected === "ALL" || b.id === selected)
-          .map((b) => {
-            const inventory = inventories[b.id] || [],
-              branchSales = sales.filter((s) => s.branchId === b.id);
-            return {
-              farmacia: b.name,
-              medicamentos: inventory.length,
-              unidades: inventory.reduce((sum, p) => sum + p.stock, 0),
-              criticos: inventory.filter((p) => p.stock <= p.min).length,
-              ventas: branchSales.reduce((sum, sale) => sum + sale.total, 0),
-            };
-          }),
-      });
+      const params = new URLSearchParams({ branch: selected });
+      if (dateFrom) params.set("from", dateFrom);
+      if (dateTo) params.set("to", dateTo);
+      if (selectedUser) params.set("user", selectedUser);
+      if (movement) params.set("movement", movement);
+      const response = await fetch(`/api/v1/reports/excel/?${params}`, { credentials: "same-origin" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "No se pudo generar el reporte.");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `reporte-supabase-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      anchor.click();
+      URL.revokeObjectURL(url);
       setConfirmExport(false);
-      onNotify("El reporte Excel se descargó correctamente.");
+      onNotify("El reporte se generó directamente desde Supabase.");
+    } catch (error) {
+      onNotify(error.message);
     } finally {
       setExporting(false);
     }
@@ -2334,6 +2352,17 @@ function AdminReports({ branches, inventories, sales, onNotify }) {
               {b.name}
             </option>
           ))}
+        </select>
+        <input className="branch-select" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="Fecha inicial" />
+        <input className="branch-select" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="Fecha final" />
+        <select className="branch-select" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
+          <option value="">Todos los usuarios</option>
+          {users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+        </select>
+        <select className="branch-select" value={movement} onChange={(e) => setMovement(e.target.value)}>
+          <option value="">Todos los movimientos</option>
+          <option value="ENTRADA">Entradas</option>
+          <option value="SALIDA">Salidas</option>
         </select>
         <button
           className="button primary report-download"
@@ -2446,6 +2475,7 @@ export default function AppV2() {
     [sales, setSales] = useState(
       () => JSON.parse(localStorage.getItem("pharma-sales") || "null") || [],
     ),
+    [lotAlerts, setLotAlerts] = useState([]),
     [active, setActive] = useState("Dashboard"),
     [sidebar, setSidebar] = useState(false),
     [modal, setModal] = useState(false),
@@ -2504,6 +2534,8 @@ export default function AppV2() {
           state = await migrationResponse.json();
         }
         applyState(state);
+        const alertResponse = await fetch("/api/v1/lots/alerts/?days=90", { credentials: "same-origin" });
+        if (alertResponse.ok) setLotAlerts((await alertResponse.json()).lots || []);
         [
           "pharma-inventories",
           "pharma-branches",
@@ -2686,10 +2718,11 @@ export default function AppV2() {
               branches={branches}
               inventories={inventories}
               sales={sales}
+              users={users}
               onNotify={setToast}
             />
           ) : (
-            <Alerts items={items} setItems={setItems} branch={branch} />
+            <Alerts items={items} setItems={setItems} branch={branch} lotAlerts={lotAlerts} />
           )}
         </main>
       </div>

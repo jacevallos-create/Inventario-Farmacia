@@ -2,6 +2,9 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 
 from apps.farmacias.models import Farmacia, UsuarioFarmacia
+from apps.auditoria.models import AuditLog
+from apps.lotes.models import Lote
+from apps.ventas.models import VentaLote
 
 
 class SmokeTests(TestCase):
@@ -70,6 +73,36 @@ class SmokeTests(TestCase):
         self.assertEqual(delete_response.status_code, 204)
         self.assertEqual(self.client.get("/api/v1/state/").json()["inventories"]["central"], [])
         self.assertEqual(self.client.get("/api/v1/state/").status_code, 200)
+
+    def test_sale_is_atomic_and_consumes_lots_by_fefo(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.client.force_login(self.user)
+        payload = {
+            "branches": [{"id": "central", "name": "Farmacia Central", "active": True}],
+            "inventories": {"central": [{"id": 1, "name": "Paracetamol", "sku": "FEFO-1", "category": "Otros", "lab": "Test", "stock": 10, "min": 2, "buyPrice": 1, "sellPrice": 2}]},
+            "suppliers": [], "sales": [], "users": [],
+        }
+        state = self.client.put("/api/v1/state/", payload, content_type="application/json").json()
+        medicine_id = state["inventories"]["central"][0]["id"]
+        lot = Lote.objects.get(medicamento_id=medicine_id)
+        response = self.client.post("/api/v1/sales/", {
+            "branchId": "central", "productId": medicine_id, "qty": 3, "customer": "Paciente"
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, 201, response.json())
+        lot.refresh_from_db()
+        self.assertEqual(lot.cantidad_disponible, 7)
+        self.assertEqual(VentaLote.objects.get().cantidad, 3)
+        self.assertTrue(AuditLog.objects.filter(entidad="venta", usuario=self.user).exists())
+
+    def test_excel_report_is_generated_from_database(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.client.force_login(self.user)
+        response = self.client.get("/api/v1/reports/excel/?branch=TEST")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.assertTrue(response.content.startswith(b"PK"))
 
     def test_admin_redirects_anonymous_user(self):
         self.assertEqual(self.client.get("/admin/").status_code, 302)

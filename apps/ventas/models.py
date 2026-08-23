@@ -18,3 +18,13 @@ class Venta(TimeStampedModel):
     class Meta:
         ordering = ["-creado_en"]
         indexes = [models.Index(fields=["farmacia", "creado_en"])]
+
+
+class VentaLote(TimeStampedModel):
+    venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name="lotes_consumidos")
+    lote = models.ForeignKey("lotes.Lote", on_delete=models.PROTECT, related_name="detalles_venta")
+    cantidad = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["venta", "lote"], name="uq_venta_lote")]
