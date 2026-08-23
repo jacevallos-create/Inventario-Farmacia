@@ -43,6 +43,12 @@ class SmokeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["user"]["email"], "test@example.com")
 
+    def test_allauth_does_not_expect_a_username_field(self):
+        from allauth.account import app_settings
+
+        self.assertIsNone(app_settings.USER_MODEL_USERNAME_FIELD)
+        self.assertEqual(app_settings.USERNAME_VALIDATORS, [])
+
     def test_admin_redirects_anonymous_user(self):
         self.assertEqual(self.client.get("/admin/").status_code, 302)
 
