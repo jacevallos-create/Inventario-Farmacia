@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from .state_api import StateRecordView, SystemStateView
 from .operations_api import ExcelReportView, LotAlertsView, SaleCreateView
-from .business_api import CashCloseView, CashMovementView, CashSessionView, PurchaseListCreateView, PurchaseReceiveView, TransferActionView, TransferListCreateView
+from .business_api import AvailableLotsView, CashCloseView, CashMovementView, CashSessionView, PurchaseListCreateView, PurchaseReceiveView, TransferActionView, TransferListCreateView
 
 
 class HealthView(APIView):
@@ -87,6 +87,7 @@ urlpatterns = [
     path("purchases/", PurchaseListCreateView.as_view(), name="api-purchases"),
     path("purchases/<int:purchase_id>/receive/", PurchaseReceiveView.as_view(), name="api-purchase-receive"),
     path("transfers/", TransferListCreateView.as_view(), name="api-transfers"),
+    path("transfers/lots/", AvailableLotsView.as_view(), name="api-transfer-lots"),
     path("transfers/<int:transfer_id>/<str:action>/", TransferActionView.as_view(), name="api-transfer-action"),
     path("cash/session/", CashSessionView.as_view(), name="api-cash-session"),
     path("cash/session/<int:session_id>/movement/", CashMovementView.as_view(), name="api-cash-movement"),

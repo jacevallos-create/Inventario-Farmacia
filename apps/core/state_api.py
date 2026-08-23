@@ -224,8 +224,11 @@ class StateRecordView(APIView):
             user = get_user_model().objects.filter(pk=identifier).first()
             if not user:
                 return Response(status=404)
-            if user.pk == request.user.pk or user.is_superuser:
-                return Response({"detail": "No se puede eliminar este administrador."}, status=409)
+            if user.pk == request.user.pk:
+                return Response({"detail": "No puedes eliminar la cuenta con la que tienes la sesión abierta."}, status=409)
+            active_admins = get_user_model().objects.filter(is_active=True, is_staff=True).count()
+            if user.is_staff and active_admins <= 1:
+                return Response({"detail": "No se puede eliminar el último administrador activo."}, status=409)
             user.is_active = False
             user.save(update_fields=["is_active"])
             audit(request, AuditLog.Accion.ELIMINAR, "usuario", user, f"Usuario {user.email} desactivado")

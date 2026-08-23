@@ -181,6 +181,15 @@ class TransferListCreateView(APIView):
         return Response(serialize_transfer(transfer), status=201)
 
 
+class AvailableLotsView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        pharmacy = Farmacia.objects.filter(codigo__iexact=request.query_params.get("branch"), activo=True).first()
+        if not pharmacy or not pharmacy_access(request.user, pharmacy): return Response({"detail": "Sucursal no autorizada."}, status=403)
+        rows = Lote.objects.filter(farmacia=pharmacy, cantidad_disponible__gt=0, fecha_vencimiento__gte=timezone.localdate()).select_related("medicamento").order_by("fecha_vencimiento")
+        return Response({"lots": [{"id": x.id, "productId": x.medicamento_id, "product": x.medicamento.nombre_comercial, "sku": x.medicamento.codigo_interno, "number": x.numero, "quantity": x.cantidad_disponible, "expires": x.fecha_vencimiento.isoformat()} for x in rows]})
+
+
 class TransferActionView(APIView):
     permission_classes = [IsAuthenticated]
     @transaction.atomic

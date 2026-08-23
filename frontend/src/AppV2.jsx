@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   AlertTriangle,
+  ArrowLeftRight,
   BarChart3,
   Bell,
   Building2,
@@ -277,6 +278,7 @@ const nav = [
   ["Sucursales", Building2],
   ["Proveedores", Truck],
   ["Compras", ClipboardList],
+  ["Transferencias", ArrowLeftRight],
   ["Caja", Wallet],
   ["Usuarios y Accesos", Users],
   ["Reportes", BarChart3],
@@ -1971,6 +1973,15 @@ function CashRegister({ branch }) {
   {form && <SimpleModal title={form.kind==="open"?"Abrir caja":form.kind==="close"?"Cerrar caja":"Movimiento de caja"} onClose={()=>setForm(null)}><form className="simple-form" onSubmit={(e)=>{e.preventDefault(); if(form.kind==="open")send("/api/v1/cash/session/",{branchId:branch.id,initial:form.initial}); else if(form.kind==="close")send(`/api/v1/cash/session/${session.id}/close/`,{declared:form.declared}); else send(`/api/v1/cash/session/${session.id}/movement/`,form);}}><div className="form-grid">{form.kind==="movement"&&<><label>Tipo<select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option value="INGRESO">Ingreso</option><option value="GASTO">Gasto</option><option value="RETIRO">Retiro</option></select></label><label>Detalle<input value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></label></>}<label className="wide">{form.kind==="close"?"Efectivo contado":"Monto"}<input type="number" min="0" step="0.01" required value={form.initial??form.declared??form.amount} onChange={e=>setForm({...form,[form.kind==="open"?"initial":form.kind==="close"?"declared":"amount"]:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Procesando…":"Confirmar"}</button></footer></form></SimpleModal>}</>;
 }
 
+function Transfers({ branch, branches }) {
+  const [rows,setRows]=useState([]),[lots,setLots]=useState([]),[form,setForm]=useState(null),[busy,setBusy]=useState(false);
+  const load=async()=>{const [a,b]=await Promise.all([fetch("/api/v1/transfers/",{credentials:"same-origin"}),fetch(`/api/v1/transfers/lots/?branch=${encodeURIComponent(branch.id)}`,{credentials:"same-origin"})]);if(a.ok)setRows((await a.json()).transfers||[]);if(b.ok)setLots((await b.json()).lots||[]);};
+  useEffect(()=>{load();},[branch.id]);
+  const create=async(e)=>{e.preventDefault();setBusy(true);try{const response=await fetch("/api/v1/transfers/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()},body:JSON.stringify({origin:branch.id,destination:form.destination,items:[{lotId:form.lotId,quantity:form.quantity}]})});const data=await response.json();if(!response.ok)throw new Error(data.detail);setRows([data,...rows]);setForm(null);}catch(error){alert(error.message);}finally{setBusy(false);}};
+  const action=async(row,name)=>{const response=await fetch(`/api/v1/transfers/${row.id}/${name}/`,{method:"POST",credentials:"same-origin",headers:{"X-CSRFToken":csrfToken()}});const data=await response.json();if(!response.ok)return alert(data.detail);setRows(rows.map(x=>x.id===data.id?data:x));};
+  return <><section className="page-heading"><div><p className="eyebrow">TRAZABILIDAD ENTRE SEDES</p><h1>Transferencias</h1><p>Despacho y recepción controlados por lote.</p></div><button className="button primary" disabled={!lots.length||branches.length<2} onClick={()=>setForm({destination:branches.find(x=>x.id!==branch.id)?.id,lotId:lots[0]?.id,quantity:1})}><Plus/>Nueva transferencia</button></section><section className="table-card"><div className="table-scroll"><table><thead><tr><th>Número</th><th>Origen → destino</th><th>Productos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{rows.map(x=><tr key={x.id}><td><b>{x.number}</b><small>{x.user}</small></td><td>{x.origin} → {x.destination}</td><td>{x.items.map(i=>`${i.product} · ${i.lot} (${i.quantity})`).join(", ")}</td><td><span className="status success">{x.status}</span></td><td><div className="row-actions">{x.status==="SOLICITADA"&&<button title="Aprobar" onClick={()=>action(x,"approve")}><CheckCircle2/></button>}{x.status==="APROBADA"&&<button title="Despachar" onClick={()=>action(x,"dispatch")}><Truck/></button>}{x.status==="TRANSITO"&&<button title="Recibir" onClick={()=>action(x,"receive")}><Package/></button>}</div></td></tr>)}</tbody></table></div></section>{form&&<SimpleModal title="Nueva transferencia" onClose={()=>setForm(null)}><form className="simple-form" onSubmit={create}><div className="form-grid"><label>Destino<select value={form.destination} onChange={e=>setForm({...form,destination:e.target.value})}>{branches.filter(x=>x.id!==branch.id&&x.active!==false).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label><label>Lote disponible<select value={form.lotId} onChange={e=>setForm({...form,lotId:e.target.value})}>{lots.map(x=><option key={x.id} value={x.id}>{x.product} · {x.number} · {x.quantity} u.</option>)}</select></label><label className="wide">Cantidad<input type="number" min="1" required value={form.quantity} onChange={e=>setForm({...form,quantity:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Procesando…":"Solicitar"}</button></footer></form></SimpleModal>}</>;
+}
+
 function UserManagement({ users, setUsers, branches }) {
   const [form, setForm] = useState(null),
     [showPassword, setShowPassword] = useState(false);
@@ -2083,15 +2094,13 @@ function UserManagement({ users, setUsers, branches }) {
                       <button title="Editar" onClick={() => edit(u)}>
                         <Edit3 />
                       </button>
-                      {u.role !== "ADMIN" && (
-                        <button
-                          title="Eliminar"
-                          className="delete"
-                          onClick={() => remove(u)}
-                        >
-                          <Trash2 />
-                        </button>
-                      )}
+                      <button
+                        title="Eliminar"
+                        className="delete"
+                        onClick={() => remove(u)}
+                      >
+                        <Trash2 />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -2731,6 +2740,8 @@ export default function AppV2() {
             <Purchases branch={branch} items={items} suppliers={suppliers} />
           ) : active === "Caja" ? (
             <CashRegister branch={branch} />
+          ) : active === "Transferencias" ? (
+            <Transfers branch={branch} branches={branches} />
           ) : active === "Punto de Venta (POS)" ? (
             <Sales
               items={items}
