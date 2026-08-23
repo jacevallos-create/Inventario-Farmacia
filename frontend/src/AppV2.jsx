@@ -550,29 +550,38 @@ function PharmaLogin({ onLogin, branches }) {
 }
 
 function CredentialLogin({ onLogin }) {
-  const [email, setEmail] = useState("admin@pharmasys.com"),
-    [password, setPassword] = useState("Admin2026!"),
+  const [email, setEmail] = useState(""),
+    [password, setPassword] = useState(""),
     [show, setShow] = useState(false),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(false);
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    setTimeout(() => {
-      const users =
-          JSON.parse(localStorage.getItem("pharma-users") || "null") ||
-          defaultUsers,
-        user = users.find(
-          (u) =>
-            u.active &&
-            u.email.toLowerCase() === email.trim().toLowerCase() &&
-            u.password === password,
-        );
+    const csrfToken = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("csrftoken="))
+      ?.split("=")[1];
+    try {
+      const response = await fetch("/api/v1/auth/login/", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken || "",
+        },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.detail || "No fue posible iniciar sesión.");
+      onLogin(data.user);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
       setLoading(false);
-      if (user) onLogin(user);
-      else setError("Correo o contraseña incorrectos, o usuario inactivo.");
-    }, 350);
+    }
   };
   return (
     <main className="login-shell">

@@ -33,6 +33,16 @@ class SmokeTests(TestCase):
         self.assertEqual(self.client.post("/api/v1/auth/logout/").status_code, 200)
         self.assertFalse(self.client.get("/api/v1/auth/session/").json()["authenticated"])
 
+    def test_login_api_uses_django_credentials(self):
+        self.client.get("/api/v1/auth/session/")
+        response = self.client.post(
+            "/api/v1/auth/login/",
+            {"email": "test@example.com", "password": "TestPassword2026!"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["user"]["email"], "test@example.com")
+
     def test_admin_redirects_anonymous_user(self):
         self.assertEqual(self.client.get("/admin/").status_code, 302)
 
