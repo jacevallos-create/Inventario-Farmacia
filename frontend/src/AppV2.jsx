@@ -26,6 +26,7 @@ import {
   Trash2,
   Truck,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 import {
@@ -276,6 +277,7 @@ const nav = [
   ["Sucursales", Building2],
   ["Proveedores", Truck],
   ["Compras", ClipboardList],
+  ["Caja", Wallet],
   ["Usuarios y Accesos", Users],
   ["Reportes", BarChart3],
 ];
@@ -1959,6 +1961,16 @@ function Alerts({ items, setItems, branch, lotAlerts }) {
   );
 }
 
+function CashRegister({ branch }) {
+  const [session, setSession] = useState(null), [form, setForm] = useState(null), [busy, setBusy] = useState(false);
+  const load = async () => { const response = await fetch(`/api/v1/cash/session/?branch=${encodeURIComponent(branch.id)}`, { credentials: "same-origin" }); if (response.ok) setSession((await response.json()).session); };
+  useEffect(() => { load(); }, [branch.id]);
+  const send = async (url, payload) => { setBusy(true); try { const response = await fetch(url, { method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()}, body:JSON.stringify(payload) }); const data=await response.json(); if(!response.ok) throw new Error(data.detail); setSession(data.closed ? null : data); setForm(null); } catch(error){ alert(error.message); } finally { setBusy(false); } };
+  return <><section className="page-heading"><div><p className="eyebrow">CONTROL DE EFECTIVO</p><h1>Caja diaria</h1><p>{session ? `Caja abierta · saldo esperado ${money(session.expected)}` : `No hay una caja abierta en ${branch.name}.`}</p></div>{!session && <button className="button primary" onClick={()=>setForm({kind:"open",initial:0})}><Plus/>Abrir caja</button>}</section>
+  {session && <><div className="kpi-grid sales-kpis"><article className="kpi"><span className="kpi-icon"><Wallet/></span><div><small>Saldo inicial</small><b>{money(session.initial)}</b></div></article><article className="kpi"><span className="kpi-icon"><BarChart3/></span><div><small>Saldo esperado</small><b>{money(session.expected)}</b></div></article></div><section className="page-heading"><button className="button secondary" onClick={()=>setForm({kind:"movement",type:"INGRESO",amount:"",notes:""})}>Registrar movimiento</button><button className="button primary" onClick={()=>setForm({kind:"close",declared:session.expected})}>Cerrar caja</button></section><section className="table-card"><div className="table-scroll"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Forma de pago</th><th>Detalle</th><th>Monto</th></tr></thead><tbody>{session.movements.map(x=><tr key={x.id}><td>{new Date(x.date).toLocaleString("es-EC")}</td><td>{x.type}</td><td>{x.payment}</td><td>{x.notes}</td><td><b>{money(x.amount)}</b></td></tr>)}</tbody></table></div></section></>}
+  {form && <SimpleModal title={form.kind==="open"?"Abrir caja":form.kind==="close"?"Cerrar caja":"Movimiento de caja"} onClose={()=>setForm(null)}><form className="simple-form" onSubmit={(e)=>{e.preventDefault(); if(form.kind==="open")send("/api/v1/cash/session/",{branchId:branch.id,initial:form.initial}); else if(form.kind==="close")send(`/api/v1/cash/session/${session.id}/close/`,{declared:form.declared}); else send(`/api/v1/cash/session/${session.id}/movement/`,form);}}><div className="form-grid">{form.kind==="movement"&&<><label>Tipo<select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option value="INGRESO">Ingreso</option><option value="GASTO">Gasto</option><option value="RETIRO">Retiro</option></select></label><label>Detalle<input value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></label></>}<label className="wide">{form.kind==="close"?"Efectivo contado":"Monto"}<input type="number" min="0" step="0.01" required value={form.initial??form.declared??form.amount} onChange={e=>setForm({...form,[form.kind==="open"?"initial":form.kind==="close"?"declared":"amount"]:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Procesando…":"Confirmar"}</button></footer></form></SimpleModal>}</>;
+}
+
 function UserManagement({ users, setUsers, branches }) {
   const [form, setForm] = useState(null),
     [showPassword, setShowPassword] = useState(false);
@@ -2717,6 +2729,8 @@ export default function AppV2() {
             <Suppliers suppliers={suppliers} setSuppliers={setSuppliers} />
           ) : active === "Compras" ? (
             <Purchases branch={branch} items={items} suppliers={suppliers} />
+          ) : active === "Caja" ? (
+            <CashRegister branch={branch} />
           ) : active === "Punto de Venta (POS)" ? (
             <Sales
               items={items}

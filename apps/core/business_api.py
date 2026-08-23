@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from apps.auditoria.models import AuditLog
 from apps.compras.models import Compra, CompraDetalle
+from apps.cajas.models import Caja, MovimientoCaja, SesionCaja
 from apps.farmacias.models import Farmacia
 from apps.inventario.models import InventarioFarmacia, MovimientoInventario
 from apps.lotes.models import Lote
@@ -208,3 +209,54 @@ class TransferActionView(APIView):
         else: return Response({"detail": "La acción no corresponde al estado actual."}, status=409)
         transfer.save(); audit(request, AuditLog.Accion.MODIFICAR, "transferencia", transfer, f"Transferencia {transfer.numero}: {transfer.estado}", transfer.origen)
         return Response(serialize_transfer(transfer))
+
+
+def serialize_cash_session(session):
+    movements = session.movimientos.select_related("usuario").order_by("creado_en")
+    signed = sum((x.monto if x.tipo in (MovimientoCaja.Tipo.VENTA, MovimientoCaja.Tipo.INGRESO) else -x.monto) for x in movements)
+    expected = session.saldo_inicial + signed
+    return {"id": session.id, "cashbox": session.caja.nombre, "branchId": session.caja.farmacia.codigo.lower(), "user": session.usuario.email, "opened": timezone.localtime(session.abierta_en).isoformat(), "closed": timezone.localtime(session.cerrada_en).isoformat() if session.cerrada_en else None, "initial": float(session.saldo_inicial), "expected": float(expected), "declared": float(session.saldo_final_declarado) if session.saldo_final_declarado is not None else None, "difference": float(session.saldo_final_declarado - expected) if session.saldo_final_declarado is not None else None, "movements": [{"id": x.id, "type": x.tipo, "payment": x.forma_pago, "amount": float(x.monto), "reference": x.referencia, "notes": x.observacion, "date": timezone.localtime(x.creado_en).isoformat(), "user": x.usuario.email} for x in movements]}
+
+
+class CashSessionView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        branch = request.query_params.get("branch")
+        session = SesionCaja.objects.filter(caja__farmacia__codigo__iexact=branch, usuario=request.user, cerrada_en__isnull=True).select_related("caja", "caja__farmacia", "usuario").first()
+        return Response({"session": serialize_cash_session(session) if session else None})
+    @transaction.atomic
+    def post(self, request):
+        pharmacy = Farmacia.objects.filter(codigo__iexact=request.data.get("branchId"), activo=True).first()
+        if not pharmacy or not pharmacy_access(request.user, pharmacy): return Response({"detail": "Sucursal no autorizada."}, status=403)
+        if SesionCaja.objects.filter(usuario=request.user, cerrada_en__isnull=True).exists(): return Response({"detail": "Ya tienes una caja abierta."}, status=409)
+        initial = decimal_value(request.data.get("initial"))
+        if initial < 0: return Response({"detail": "El saldo inicial no es válido."}, status=400)
+        cashbox, _ = Caja.objects.get_or_create(farmacia=pharmacy, nombre=request.data.get("name") or "Caja principal")
+        session = SesionCaja.objects.create(caja=cashbox, usuario=request.user, saldo_inicial=initial)
+        audit(request, AuditLog.Accion.CREAR, "caja", session, f"Apertura de {cashbox.nombre}", pharmacy, {"saldo_inicial": str(initial)})
+        return Response(serialize_cash_session(session), status=201)
+
+
+class CashMovementView(APIView):
+    permission_classes = [IsAuthenticated]
+    @transaction.atomic
+    def post(self, request, session_id):
+        session = SesionCaja.objects.select_for_update().select_related("caja", "caja__farmacia", "usuario").filter(pk=session_id, usuario=request.user, cerrada_en__isnull=True).first()
+        amount = decimal_value(request.data.get("amount")); movement_type = request.data.get("type")
+        if not session or amount <= 0 or movement_type not in MovimientoCaja.Tipo.values: return Response({"detail": "Movimiento inválido o caja cerrada."}, status=409)
+        movement = MovimientoCaja.objects.create(sesion=session, tipo=movement_type, forma_pago=request.data.get("payment") or "EFECTIVO", monto=amount, referencia=request.data.get("reference", ""), observacion=request.data.get("notes", ""), usuario=request.user)
+        audit(request, AuditLog.Accion.CREAR, "movimiento_caja", movement, f"{movement_type} en {session.caja.nombre}", session.caja.farmacia, {"monto": str(amount)})
+        return Response(serialize_cash_session(session), status=201)
+
+
+class CashCloseView(APIView):
+    permission_classes = [IsAuthenticated]
+    @transaction.atomic
+    def post(self, request, session_id):
+        session = SesionCaja.objects.select_for_update().select_related("caja", "caja__farmacia", "usuario").filter(pk=session_id, usuario=request.user, cerrada_en__isnull=True).first()
+        declared = decimal_value(request.data.get("declared"))
+        if not session or declared < 0: return Response({"detail": "Caja o saldo declarado inválido."}, status=409)
+        movements = session.movimientos.all(); signed = sum((x.monto if x.tipo in (MovimientoCaja.Tipo.VENTA, MovimientoCaja.Tipo.INGRESO) else -x.monto) for x in movements)
+        session.saldo_final_sistema = session.saldo_inicial + signed; session.saldo_final_declarado = declared; session.cerrada_en = timezone.now(); session.save()
+        audit(request, AuditLog.Accion.MODIFICAR, "caja", session, f"Cierre de {session.caja.nombre}", session.caja.farmacia, {"esperado": str(session.saldo_final_sistema), "declarado": str(declared), "diferencia": str(declared - session.saldo_final_sistema)})
+        return Response(serialize_cash_session(session))

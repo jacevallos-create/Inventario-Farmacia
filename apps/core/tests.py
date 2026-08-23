@@ -132,6 +132,18 @@ class SmokeTests(TestCase):
         self.assertEqual(InventarioFarmacia.objects.get(farmacia__codigo="central", medicamento_id=medicine_id).stock_actual, 10)
         self.assertTrue(MovimientoInventario.objects.filter(concepto="COMPRA", lote__numero="LOT-EC-1").exists())
 
+    def test_cash_open_movement_and_close_calculates_difference(self):
+        self.client.force_login(self.user)
+        opened = self.client.post("/api/v1/cash/session/", {"branchId": "TEST", "initial": "100"}, content_type="application/json")
+        self.assertEqual(opened.status_code, 201, opened.json())
+        session_id = opened.json()["id"]
+        movement = self.client.post(f"/api/v1/cash/session/{session_id}/movement/", {"type": "INGRESO", "amount": "25", "notes": "Cambio"}, content_type="application/json")
+        self.assertEqual(movement.status_code, 201, movement.json())
+        closed = self.client.post(f"/api/v1/cash/session/{session_id}/close/", {"declared": "124"}, content_type="application/json")
+        self.assertEqual(closed.status_code, 200, closed.json())
+        self.assertEqual(closed.json()["expected"], 125.0)
+        self.assertEqual(closed.json()["difference"], -1.0)
+
     def test_admin_redirects_anonymous_user(self):
         self.assertEqual(self.client.get("/admin/").status_code, 302)
 
