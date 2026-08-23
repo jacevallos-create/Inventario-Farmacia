@@ -52,6 +52,11 @@ const csrfToken = () =>
     .find((row) => row.startsWith("csrftoken="))
     ?.split("=")[1] || "";
 
+const systemNotice = (message) =>
+  window.dispatchEvent(
+    new CustomEvent("pharmasys:notice", { detail: String(message) }),
+  );
+
 const deleteRemote = async (resource, identifier, branch = "") => {
   const query = branch ? `?branch=${encodeURIComponent(branch)}` : "";
   const response = await fetch(
@@ -416,6 +421,26 @@ function SuccessToast({ message }) {
         <b>Operación completada</b>
         <small>{message}</small>
       </div>
+    </div>
+  );
+}
+
+function NoticeDialog({ message, onClose }) {
+  return (
+    <div className="confirm-overlay" role="presentation">
+      <section className="confirm-dialog" role="alertdialog" aria-modal="true">
+        <span className="confirm-icon primary">
+          <ShieldCheck />
+        </span>
+        <p className="eyebrow">MENSAJE DEL SISTEMA</p>
+        <h2>Revisa esta operación</h2>
+        <p className="confirm-message">{message}</p>
+        <div className="confirm-actions">
+          <button className="button primary" onClick={onClose}>
+            Entendido
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1033,7 +1058,8 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
     [presentation, setPresentation] = useState("Todas"),
     [alert, setAlert] = useState("Todos"),
     [showCode, setShowCode] = useState(true),
-    [editing, setEditing] = useState(null);
+    [editing, setEditing] = useState(null),
+    [restocking, setRestocking] = useState(null);
   const [askDelete, deleteDialog] = useDeleteConfirmation();
   useEffect(() => setQuery(initialQuery), [initialQuery]);
   const rows = useMemo(
@@ -1065,19 +1091,12 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
         await deleteRemote("inventory", p.id, branchId);
         setItems(items.filter((x) => x.id !== p.id));
       } catch (error) {
-        alert(error.message);
+        systemNotice(error.message);
       }
     }
   };
-  const restock = (p) => {
-    const amount = Number(prompt(`Cantidad para reabastecer ${p.name}:`, 10));
-    if (amount > 0)
-      setItems(
-        items.map((x) =>
-          x.id === p.id ? { ...x, stock: x.stock + amount } : x,
-        ),
-      );
-  };
+  const restock = (p) => setRestocking({ product: p, amount: 10 });
+  const applyRestock = (event) => { event.preventDefault(); const amount=Number(restocking.amount); if(amount>0)setItems(items.map(x=>x.id===restocking.product.id?{...x,stock:x.stock+amount}:x)); setRestocking(null); };
   return (
     <>
       <section className="page-heading">
@@ -1232,6 +1251,7 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
           onSave={save}
         />
       )}
+      {restocking&&<SimpleModal title={`Reabastecer ${restocking.product.name}`} onClose={()=>setRestocking(null)}><form className="simple-form" onSubmit={applyRestock}><div className="form-grid"><label className="wide">Cantidad a ingresar<input autoFocus type="number" min="1" required value={restocking.amount} onChange={e=>setRestocking({...restocking,amount:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setRestocking(null)}>Cancelar</button><button className="button primary">Confirmar ingreso</button></footer></form></SimpleModal>}
       {deleteDialog}
     </>
   );
@@ -1242,8 +1262,10 @@ function Dashboard({ items, branch, onInventory, user }) {
     value = items.reduce((s, p) => s + p.stock * p.buyPrice, 0);
   const [metrics, setMetrics] = useState(null);
   useEffect(() => {
-    fetch(`/api/v1/dashboard/?branch=${encodeURIComponent(branch.id)}`, { credentials: "same-origin" })
-      .then((response) => response.ok ? response.json() : null)
+    fetch(`/api/v1/dashboard/?branch=${encodeURIComponent(branch.id)}`, {
+      credentials: "same-origin",
+    })
+      .then((response) => (response.ok ? response.json() : null))
       .then((data) => data && setMetrics(data));
   }, [branch.id]);
   return (
@@ -1273,8 +1295,18 @@ function Dashboard({ items, branch, onInventory, user }) {
             metrics?.critical ?? critical.length,
             "Requieren atención",
           ],
-          [ShoppingCart, "Ventas de hoy", money(metrics?.salesToday), "Registradas en Supabase"],
-          [AlertTriangle, "Pérdida por vencimiento", money(metrics?.expiredLoss), "Lotes vencidos valorizados"],
+          [
+            ShoppingCart,
+            "Ventas de hoy",
+            money(metrics?.salesToday),
+            "Registradas en Supabase",
+          ],
+          [
+            AlertTriangle,
+            "Pérdida por vencimiento",
+            money(metrics?.expiredLoss),
+            "Lotes vencidos valorizados",
+          ],
         ].map(([Icon, label, value, note], i) => (
           <article className="kpi" key={label}>
             <span className={`kpi-icon c${i}`}>
@@ -1397,9 +1429,9 @@ function BranchManager({
   };
   const remove = async (b) => {
     if (b.id === branchId)
-      return alert("No puedes eliminar la sucursal activa.");
+      return systemNotice("No puedes eliminar la sucursal activa.");
     if ((inventories[b.id] || []).length)
-      return alert(
+      return systemNotice(
         "La sucursal tiene inventario. Trasládalo o elimínalo antes.",
       );
     const accepted = await askDelete({
@@ -1412,7 +1444,7 @@ function BranchManager({
         await deleteRemote("branches", b.id);
         setBranches(branches.filter((x) => x.id !== b.id));
       } catch (error) {
-        alert(error.message);
+        systemNotice(error.message);
       }
     }
   };
@@ -1560,6 +1592,7 @@ function Purchases({ branch, items, suppliers }) {
     [form, setForm] = useState(null),
     [receiving, setReceiving] = useState(null),
     [supplierReturn, setSupplierReturn] = useState(null),
+    [cancellation, setCancellation] = useState(null),
     [busy, setBusy] = useState(false);
   const [askConfirm, actionDialog] = useActionConfirmation();
   const load = async () => {
@@ -1609,23 +1642,104 @@ function Purchases({ branch, items, suppliers }) {
       setPurchases([data, ...purchases]);
       setForm(null);
     } catch (error) {
-      alert(error.message);
+      systemNotice(error.message);
     } finally {
       setBusy(false);
     }
   };
   const receive = async (event) => {
-    event.preventDefault(); setBusy(true);
-    const response = await fetch(`/api/v1/purchases/${receiving.purchase.id}/receive/`, { method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()}, body:JSON.stringify({items:[{detailId:receiving.detailId,quantity:receiving.quantity,lot:receiving.lot,expires:receiving.expires}]}) });
-    const data=await response.json(); setBusy(false); if(!response.ok)return alert(data.detail);
-    setPurchases(purchases.map(x=>x.id===data.id?data:x)); setReceiving(null);
+    event.preventDefault();
+    setBusy(true);
+    const response = await fetch(
+      `/api/v1/purchases/${receiving.purchase.id}/receive/`,
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken(),
+        },
+        body: JSON.stringify({
+          items: [
+            {
+              detailId: receiving.detailId,
+              quantity: receiving.quantity,
+              lot: receiving.lot,
+              expires: receiving.expires,
+            },
+          ],
+        }),
+      },
+    );
+    const data = await response.json();
+    setBusy(false);
+    if (!response.ok) return systemNotice(data.detail);
+    setPurchases(purchases.map((x) => (x.id === data.id ? data : x)));
+    setReceiving(null);
   };
-  const cancelPurchase = async (purchase) => {
-    const reason=window.prompt("Motivo de anulación:"); if(!reason)return;
-    if(!await askConfirm({icon:Trash2,tone:"danger",eyebrow:"ANULAR ORDEN",title:`¿Anular ${purchase.number}?`,message:"Se cancelará el saldo pendiente. Las recepciones ya realizadas conservarán su trazabilidad.",confirmLabel:"Anular orden"}))return;
-    const response=await fetch(`/api/v1/purchases/${purchase.id}/cancel/`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()},body:JSON.stringify({reason})});const data=await response.json();if(!response.ok)return alert(data.detail);setPurchases(purchases.map(x=>x.id===data.id?data:x));
+  const cancelPurchase = async (event) => {
+    event.preventDefault(); const purchase=cancellation.purchase, reason=cancellation.reason;
+    if (
+      !(await askConfirm({
+        icon: Trash2,
+        tone: "danger",
+        eyebrow: "ANULAR ORDEN",
+        title: `¿Anular ${purchase.number}?`,
+        message:
+          "Se cancelará el saldo pendiente. Las recepciones ya realizadas conservarán su trazabilidad.",
+        confirmLabel: "Anular orden",
+      }))
+    )
+      return;
+    const response = await fetch(`/api/v1/purchases/${purchase.id}/cancel/`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken(),
+      },
+      body: JSON.stringify({ reason }),
+    });
+    const data = await response.json();
+    if (!response.ok) return systemNotice(data.detail);
+    setPurchases(purchases.map((x) => (x.id === data.id ? data : x))); setCancellation(null);
   };
-  const returnSupplier = async(event)=>{event.preventDefault();if(!await askConfirm({icon:Truck,tone:"danger",eyebrow:"DEVOLUCIÓN A PROVEEDOR",title:"¿Confirmar salida del lote?",message:"Las unidades saldrán del inventario y quedarán registradas contra la compra original.",confirmLabel:"Devolver"}))return;setBusy(true);const response=await fetch(`/api/v1/purchases/${supplierReturn.purchase.id}/return/`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()},body:JSON.stringify({lotId:supplierReturn.lotId,quantity:supplierReturn.quantity,reason:supplierReturn.reason})});const data=await response.json();setBusy(false);if(!response.ok)return alert(data.detail);setSupplierReturn(null);};
+  const returnSupplier = async (event) => {
+    event.preventDefault();
+    if (
+      !(await askConfirm({
+        icon: Truck,
+        tone: "danger",
+        eyebrow: "DEVOLUCIÓN A PROVEEDOR",
+        title: "¿Confirmar salida del lote?",
+        message:
+          "Las unidades saldrán del inventario y quedarán registradas contra la compra original.",
+        confirmLabel: "Devolver",
+      }))
+    )
+      return;
+    setBusy(true);
+    const response = await fetch(
+      `/api/v1/purchases/${supplierReturn.purchase.id}/return/`,
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken(),
+        },
+        body: JSON.stringify({
+          lotId: supplierReturn.lotId,
+          quantity: supplierReturn.quantity,
+          reason: supplierReturn.reason,
+        }),
+      },
+    );
+    const data = await response.json();
+    setBusy(false);
+    if (!response.ok) return systemNotice(data.detail);
+    setSupplierReturn(null);
+  };
   return (
     <>
       <section className="page-heading">
@@ -1677,7 +1791,55 @@ function Purchases({ branch, items, suppliers }) {
                   <td>
                     <span className="status success">{purchase.status}</span>
                   </td>
-                  <td><div className="row-actions">{!["RECIBIDA","ANULADA"].includes(purchase.status)&&<button title="Recibir" onClick={()=>{const detail=purchase.items.find(x=>x.received<x.ordered);setReceiving({purchase,detailId:detail?.id,quantity:detail?detail.ordered-detail.received:1,lot:"",expires:""});}}><Package/></button>}{purchase.receipts?.length>0&&<button title="Devolver al proveedor" onClick={()=>setSupplierReturn({purchase,lotId:purchase.receipts[0].lotId,quantity:1,reason:""})}><Truck/></button>}{!["RECIBIDA","ANULADA"].includes(purchase.status)&&<button className="delete" title="Anular" onClick={()=>cancelPurchase(purchase)}><Trash2/></button>}</div></td>
+                  <td>
+                    <div className="row-actions">
+                      {!["RECIBIDA", "ANULADA"].includes(purchase.status) && (
+                        <button
+                          title="Recibir"
+                          onClick={() => {
+                            const detail = purchase.items.find(
+                              (x) => x.received < x.ordered,
+                            );
+                            setReceiving({
+                              purchase,
+                              detailId: detail?.id,
+                              quantity: detail
+                                ? detail.ordered - detail.received
+                                : 1,
+                              lot: "",
+                              expires: "",
+                            });
+                          }}
+                        >
+                          <Package />
+                        </button>
+                      )}
+                      {purchase.receipts?.length > 0 && (
+                        <button
+                          title="Devolver al proveedor"
+                          onClick={() =>
+                            setSupplierReturn({
+                              purchase,
+                              lotId: purchase.receipts[0].lotId,
+                              quantity: 1,
+                              reason: "",
+                            })
+                          }
+                        >
+                          <Truck />
+                        </button>
+                      )}
+                      {!["RECIBIDA", "ANULADA"].includes(purchase.status) && (
+                        <button
+                          className="delete"
+                          title="Anular"
+                          onClick={() => setCancellation({ purchase, reason: "" })}
+                        >
+                          <Trash2 />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1767,8 +1929,149 @@ function Purchases({ branch, items, suppliers }) {
           </form>
         </SimpleModal>
       )}
-      {receiving && <SimpleModal title={`Recibir ${receiving.purchase.number}`} onClose={()=>setReceiving(null)}><form className="simple-form" onSubmit={receive}><div className="form-grid"><label>Producto<select value={receiving.detailId} onChange={e=>setReceiving({...receiving,detailId:e.target.value})}>{receiving.purchase.items.filter(x=>x.received<x.ordered).map(x=><option value={x.id} key={x.id}>{x.product} · pendiente {x.ordered-x.received}</option>)}</select></label><label>Cantidad<input type="number" min="1" required value={receiving.quantity} onChange={e=>setReceiving({...receiving,quantity:e.target.value})}/></label><label>Número de lote<input required value={receiving.lot} onChange={e=>setReceiving({...receiving,lot:e.target.value})}/></label><label>Vencimiento<input type="date" required value={receiving.expires} onChange={e=>setReceiving({...receiving,expires:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setReceiving(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Recibiendo…":"Confirmar recepción"}</button></footer></form></SimpleModal>}
-      {supplierReturn&&<SimpleModal title="Devolución al proveedor" onClose={()=>setSupplierReturn(null)}><form className="simple-form" onSubmit={returnSupplier}><div className="form-grid"><label>Lote<select value={supplierReturn.lotId} onChange={e=>setSupplierReturn({...supplierReturn,lotId:e.target.value})}>{supplierReturn.purchase.receipts.map(x=><option key={x.lotId} value={x.lotId}>{x.product} · {x.lot}</option>)}</select></label><label>Cantidad<input type="number" min="1" required value={supplierReturn.quantity} onChange={e=>setSupplierReturn({...supplierReturn,quantity:e.target.value})}/></label><label className="wide">Motivo<input required value={supplierReturn.reason} onChange={e=>setSupplierReturn({...supplierReturn,reason:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setSupplierReturn(null)}>Cancelar</button><button className="button primary" disabled={busy}>Continuar</button></footer></form></SimpleModal>}
+      {receiving && (
+        <SimpleModal
+          title={`Recibir ${receiving.purchase.number}`}
+          onClose={() => setReceiving(null)}
+        >
+          <form className="simple-form" onSubmit={receive}>
+            <div className="form-grid">
+              <label>
+                Producto
+                <select
+                  value={receiving.detailId}
+                  onChange={(e) =>
+                    setReceiving({ ...receiving, detailId: e.target.value })
+                  }
+                >
+                  {receiving.purchase.items
+                    .filter((x) => x.received < x.ordered)
+                    .map((x) => (
+                      <option value={x.id} key={x.id}>
+                        {x.product} · pendiente {x.ordered - x.received}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Cantidad
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={receiving.quantity}
+                  onChange={(e) =>
+                    setReceiving({ ...receiving, quantity: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Número de lote
+                <input
+                  required
+                  value={receiving.lot}
+                  onChange={(e) =>
+                    setReceiving({ ...receiving, lot: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Vencimiento
+                <input
+                  type="date"
+                  required
+                  value={receiving.expires}
+                  onChange={(e) =>
+                    setReceiving({ ...receiving, expires: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setReceiving(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary" disabled={busy}>
+                {busy ? "Recibiendo…" : "Confirmar recepción"}
+              </button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
+      {supplierReturn && (
+        <SimpleModal
+          title="Devolución al proveedor"
+          onClose={() => setSupplierReturn(null)}
+        >
+          <form className="simple-form" onSubmit={returnSupplier}>
+            <div className="form-grid">
+              <label>
+                Lote
+                <select
+                  value={supplierReturn.lotId}
+                  onChange={(e) =>
+                    setSupplierReturn({
+                      ...supplierReturn,
+                      lotId: e.target.value,
+                    })
+                  }
+                >
+                  {supplierReturn.purchase.receipts.map((x) => (
+                    <option key={x.lotId} value={x.lotId}>
+                      {x.product} · {x.lot}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Cantidad
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={supplierReturn.quantity}
+                  onChange={(e) =>
+                    setSupplierReturn({
+                      ...supplierReturn,
+                      quantity: e.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label className="wide">
+                Motivo
+                <input
+                  required
+                  value={supplierReturn.reason}
+                  onChange={(e) =>
+                    setSupplierReturn({
+                      ...supplierReturn,
+                      reason: e.target.value,
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setSupplierReturn(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary" disabled={busy}>
+                Continuar
+              </button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
+      {cancellation&&<SimpleModal title={`Anular ${cancellation.purchase.number}`} onClose={()=>setCancellation(null)}><form className="simple-form" onSubmit={cancelPurchase}><div className="form-grid"><label className="wide">Motivo de anulación<input autoFocus required value={cancellation.reason} onChange={e=>setCancellation({...cancellation,reason:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setCancellation(null)}>Cancelar</button><button className="button danger">Continuar</button></footer></form></SimpleModal>}
       {actionDialog}
     </>
   );
@@ -1800,7 +2103,7 @@ function Suppliers({ suppliers, setSuppliers }) {
         await deleteRemote("suppliers", supplier.id);
         setSuppliers(suppliers.filter((item) => item.id !== supplier.id));
       } catch (error) {
-        alert(error.message);
+        systemNotice(error.message);
       }
     }
   };
@@ -1947,7 +2250,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
       qty = Number(form.qty);
     if (!product || qty < 1) return;
     if (qty > product.stock)
-      return alert("No hay stock suficiente para completar la venta.");
+      return systemNotice("No hay stock suficiente para completar la venta.");
     setSaving(true);
     try {
       const response = await fetch("/api/v1/sales/", {
@@ -1979,16 +2282,64 @@ function Sales({ items, setItems, sales, setSales, branch }) {
       ]);
       setForm(null);
     } catch (error) {
-      alert(error.message);
+      systemNotice(error.message);
     } finally {
       setSaving(false);
     }
   };
   const submitAdjustment = async (event) => {
     event.preventDefault();
-    const isReturn=adjustment.kind==="return";
-    if(!await askConfirm({icon:isReturn?RefreshCw:Trash2,tone:isReturn?"primary":"danger",eyebrow:isReturn?"DEVOLUCIÓN Y NOTA DE CRÉDITO":"ANULAR VENTA",title:isReturn?"¿Confirmar devolución?":"¿Anular esta venta?",message:isReturn?"Se repondrá el lote original y se generará una nota de crédito.":"Se revertirá todo el inventario consumido y el movimiento de caja.",confirmLabel:isReturn?"Devolver":"Anular venta"}))return;
-    setSaving(true);const response=await fetch(`/api/v1/sales/${adjustment.sale.id}/${isReturn?"return":"cancel"}/`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()},body:JSON.stringify({quantity:adjustment.quantity,reason:adjustment.reason})});const data=await response.json();setSaving(false);if(!response.ok)return alert(data.detail);setItems(items.map(x=>x.id===Number(adjustment.sale.productId||items.find(p=>p.sku===adjustment.sale.sku)?.id)?{...x,stock:data.stock}:x));if(!isReturn)setSales(sales.map(x=>x.id===adjustment.sale.id?{...x,cancelled:true}:x));setAdjustment(null);
+    const isReturn = adjustment.kind === "return";
+    if (
+      !(await askConfirm({
+        icon: isReturn ? RefreshCw : Trash2,
+        tone: isReturn ? "primary" : "danger",
+        eyebrow: isReturn ? "DEVOLUCIÓN Y NOTA DE CRÉDITO" : "ANULAR VENTA",
+        title: isReturn ? "¿Confirmar devolución?" : "¿Anular esta venta?",
+        message: isReturn
+          ? "Se repondrá el lote original y se generará una nota de crédito."
+          : "Se revertirá todo el inventario consumido y el movimiento de caja.",
+        confirmLabel: isReturn ? "Devolver" : "Anular venta",
+      }))
+    )
+      return;
+    setSaving(true);
+    const response = await fetch(
+      `/api/v1/sales/${adjustment.sale.id}/${isReturn ? "return" : "cancel"}/`,
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken(),
+        },
+        body: JSON.stringify({
+          quantity: adjustment.quantity,
+          reason: adjustment.reason,
+        }),
+      },
+    );
+    const data = await response.json();
+    setSaving(false);
+    if (!response.ok) return systemNotice(data.detail);
+    setItems(
+      items.map((x) =>
+        x.id ===
+        Number(
+          adjustment.sale.productId ||
+            items.find((p) => p.sku === adjustment.sale.sku)?.id,
+        )
+          ? { ...x, stock: data.stock }
+          : x,
+      ),
+    );
+    if (!isReturn)
+      setSales(
+        sales.map((x) =>
+          x.id === adjustment.sale.id ? { ...x, cancelled: true } : x,
+        ),
+      );
+    setAdjustment(null);
   };
   const rows = sales.filter((s) => s.branchId === branch.id);
   return (
@@ -2003,7 +2354,12 @@ function Sales({ items, setItems, sales, setSales, branch }) {
           className="button primary"
           disabled={!items.length}
           onClick={() =>
-            setForm({ productId: items[0]?.id, qty: 1, customer: "", payment: "EFECTIVO" })
+            setForm({
+              productId: items[0]?.id,
+              qty: 1,
+              customer: "",
+              payment: "EFECTIVO",
+            })
           }
         >
           <Plus />
@@ -2060,7 +2416,40 @@ function Sales({ items, setItems, sales, setSales, branch }) {
                     <b>{money(s.total)}</b>
                   </td>
                   <td>{s.payment || "No registrado"}</td>
-                  <td><div className="row-actions">{!s.cancelled&&<button title="Devolver" onClick={()=>setAdjustment({kind:"return",sale:s,quantity:1,reason:""})}><RefreshCw/></button>}{!s.cancelled&&<button className="delete" title="Anular" onClick={()=>setAdjustment({kind:"cancel",sale:s,reason:""})}><Trash2/></button>}</div></td>
+                  <td>
+                    <div className="row-actions">
+                      {!s.cancelled && (
+                        <button
+                          title="Devolver"
+                          onClick={() =>
+                            setAdjustment({
+                              kind: "return",
+                              sale: s,
+                              quantity: 1,
+                              reason: "",
+                            })
+                          }
+                        >
+                          <RefreshCw />
+                        </button>
+                      )}
+                      {!s.cancelled && (
+                        <button
+                          className="delete"
+                          title="Anular"
+                          onClick={() =>
+                            setAdjustment({
+                              kind: "cancel",
+                              sale: s,
+                              reason: "",
+                            })
+                          }
+                        >
+                          <Trash2 />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -2116,7 +2505,12 @@ function Sales({ items, setItems, sales, setSales, branch }) {
               </label>
               <label>
                 Forma de pago
-                <select value={form.payment} onChange={(e) => setForm({ ...form, payment: e.target.value })}>
+                <select
+                  value={form.payment}
+                  onChange={(e) =>
+                    setForm({ ...form, payment: e.target.value })
+                  }
+                >
                   <option value="EFECTIVO">Efectivo</option>
                   <option value="TARJETA">Tarjeta</option>
                   <option value="TRANSFERENCIA">Transferencia</option>
@@ -2142,7 +2536,58 @@ function Sales({ items, setItems, sales, setSales, branch }) {
           </form>
         </SimpleModal>
       )}
-      {adjustment&&<SimpleModal title={adjustment.kind==="return"?"Devolución de cliente":"Anular venta"} onClose={()=>setAdjustment(null)}><form className="simple-form" onSubmit={submitAdjustment}><div className="form-grid">{adjustment.kind==="return"&&<label>Cantidad<input type="number" min="1" max={adjustment.sale.qty} required value={adjustment.quantity} onChange={e=>setAdjustment({...adjustment,quantity:e.target.value})}/></label>}<label className="wide">Motivo<input required value={adjustment.reason} onChange={e=>setAdjustment({...adjustment,reason:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setAdjustment(null)}>Cancelar</button><button className="button primary" disabled={saving}>Continuar</button></footer></form></SimpleModal>}
+      {adjustment && (
+        <SimpleModal
+          title={
+            adjustment.kind === "return"
+              ? "Devolución de cliente"
+              : "Anular venta"
+          }
+          onClose={() => setAdjustment(null)}
+        >
+          <form className="simple-form" onSubmit={submitAdjustment}>
+            <div className="form-grid">
+              {adjustment.kind === "return" && (
+                <label>
+                  Cantidad
+                  <input
+                    type="number"
+                    min="1"
+                    max={adjustment.sale.qty}
+                    required
+                    value={adjustment.quantity}
+                    onChange={(e) =>
+                      setAdjustment({ ...adjustment, quantity: e.target.value })
+                    }
+                  />
+                </label>
+              )}
+              <label className="wide">
+                Motivo
+                <input
+                  required
+                  value={adjustment.reason}
+                  onChange={(e) =>
+                    setAdjustment({ ...adjustment, reason: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setAdjustment(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary" disabled={saving}>
+                Continuar
+              </button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
       {adjustmentDialog}
     </>
   );
@@ -2151,18 +2596,9 @@ function Sales({ items, setItems, sales, setSales, branch }) {
 function Alerts({ items, setItems, branch, lotAlerts }) {
   const alerts = items.filter((p) => p.stock <= p.min);
   const expiring = lotAlerts.filter((lot) => lot.branchId === branch.id);
-  const restock = (p) => {
-    const qty = Number(
-      prompt(
-        `Cantidad a ingresar para ${p.name}:`,
-        Math.max(p.min * 2 - p.stock, 1),
-      ),
-    );
-    if (qty > 0)
-      setItems(
-        items.map((x) => (x.id === p.id ? { ...x, stock: x.stock + qty } : x)),
-      );
-  };
+  const [restocking,setRestocking]=useState(null);
+  const restock = (p) => setRestocking({product:p,amount:Math.max(p.min*2-p.stock,1)});
+  const applyRestock=(event)=>{event.preventDefault();const qty=Number(restocking.amount);if(qty>0)setItems(items.map(x=>x.id===restocking.product.id?{...x,stock:x.stock+qty}:x));setRestocking(null);};
   return (
     <>
       <section className="page-heading">
@@ -2174,6 +2610,7 @@ function Alerts({ items, setItems, branch, lotAlerts }) {
           </p>
         </div>
       </section>
+      {restocking&&<SimpleModal title={`Reabastecer ${restocking.product.name}`} onClose={()=>setRestocking(null)}><form className="simple-form" onSubmit={applyRestock}><div className="form-grid"><label className="wide">Cantidad a ingresar<input autoFocus type="number" min="1" required value={restocking.amount} onChange={e=>setRestocking({...restocking,amount:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setRestocking(null)}>Cancelar</button><button className="button primary">Confirmar ingreso</button></footer></form></SimpleModal>}
       <section className="table-card">
         <div className="table-title">
           <div>
@@ -2286,7 +2723,7 @@ function CashRegister({ branch }) {
       setSession(data.closed ? null : data);
       setForm(null);
     } catch (error) {
-      alert(error.message);
+      systemNotice(error.message);
     } finally {
       setBusy(false);
     }
@@ -2523,7 +2960,7 @@ function Transfers({ branch, branches }) {
       setRows([data, ...rows]);
       setForm(null);
     } catch (error) {
-      alert(error.message);
+      systemNotice(error.message);
     } finally {
       setBusy(false);
     }
@@ -2563,7 +3000,7 @@ function Transfers({ branch, branches }) {
       headers: { "X-CSRFToken": csrfToken() },
     });
     const data = await response.json();
-    if (!response.ok) return alert(data.detail);
+    if (!response.ok) return systemNotice(data.detail);
     setRows(rows.map((x) => (x.id === data.id ? data : x)));
   };
   return (
@@ -2727,7 +3164,7 @@ function UserManagement({ users, setUsers, branches }) {
   const save = (e) => {
     e.preventDefault();
     if (form.role !== "ADMIN" && !form.branchIds?.length)
-      return alert("Selecciona al menos una farmacia para este usuario.");
+      return systemNotice("Selecciona al menos una farmacia para este usuario.");
     const payload = {
       ...form,
       branchIds:
@@ -2750,7 +3187,7 @@ function UserManagement({ users, setUsers, branches }) {
         await deleteRemote("users", user.id);
         setUsers(users.filter((item) => item.id !== user.id));
       } catch (error) {
-        alert(error.message);
+        systemNotice(error.message);
       }
     }
   };
@@ -3296,8 +3733,10 @@ export default function AppV2() {
     [sidebar, setSidebar] = useState(false),
     [modal, setModal] = useState(false),
     [logoutDialog, setLogoutDialog] = useState(false),
+    [globalNotice, setGlobalNotice] = useState(""),
     [toast, setToast] = useState(""),
     [stateReady, setStateReady] = useState(false);
+  useEffect(()=>{const handler=(event)=>setGlobalNotice(event.detail);window.addEventListener("pharmasys:notice",handler);return()=>window.removeEventListener("pharmasys:notice",handler);},[]);
   useEffect(() => {
     const applyState = (state) => {
       setBranches(state.branches || []);
@@ -3591,6 +4030,7 @@ export default function AppV2() {
         />
       )}
       {toast && <SuccessToast message={toast} />}
+      {globalNotice&&<NoticeDialog message={globalNotice} onClose={()=>setGlobalNotice("")} />}
     </div>
   );
 }
