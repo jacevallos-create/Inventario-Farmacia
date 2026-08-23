@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from .state_api import StateRecordView, SystemStateView
 from .operations_api import ExcelReportView, LotAlertsView, SaleCreateView
-from .business_api import PurchaseListCreateView, PurchaseReceiveView
+from .business_api import PurchaseListCreateView, PurchaseReceiveView, TransferActionView, TransferListCreateView
 
 
 class HealthView(APIView):
@@ -86,4 +86,6 @@ urlpatterns = [
     path("reports/excel/", ExcelReportView.as_view(), name="api-excel-report"),
     path("purchases/", PurchaseListCreateView.as_view(), name="api-purchases"),
     path("purchases/<int:purchase_id>/receive/", PurchaseReceiveView.as_view(), name="api-purchase-receive"),
+    path("transfers/", TransferListCreateView.as_view(), name="api-transfers"),
+    path("transfers/<int:transfer_id>/<str:action>/", TransferActionView.as_view(), name="api-transfer-action"),
 ]

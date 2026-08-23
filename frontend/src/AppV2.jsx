@@ -1965,19 +1965,19 @@ function UserManagement({ users, setUsers, branches }) {
   const [askDelete, deleteDialog] = useDeleteConfirmation();
   const save = (e) => {
     e.preventDefault();
+    if (form.role !== "ADMIN" && !form.branchIds?.length)
+      return alert("Selecciona al menos una farmacia para este usuario.");
     const payload = {
       ...form,
       branchIds:
-        form.role === "ADMIN" ? branches.map((b) => b.id) : [form.branchId],
+        form.role === "ADMIN" ? branches.map((b) => b.id) : form.branchIds,
       active: form.active !== false,
     };
-    delete payload.branchId;
     if (form.id) setUsers(users.map((u) => (u.id === form.id ? payload : u)));
     else setUsers([...users, { ...payload, id: Date.now() }]);
     setForm(null);
   };
-  const edit = (u) =>
-    setForm({ ...u, branchId: u.branchIds?.[0] || branches[0]?.id });
+  const edit = (u) => setForm({ ...u, branchIds: u.branchIds || [] });
   const remove = async (user) => {
     const accepted = await askDelete({
       title: `¿Eliminar el acceso de ${user.name}?`,
@@ -2009,7 +2009,7 @@ function UserManagement({ users, setUsers, branches }) {
               email: "",
               password: "",
               role: "INVENTARIO",
-              branchId: branches[0]?.id,
+              branchIds: branches[0]?.id ? [branches[0].id] : [],
               active: true,
             })
           }
@@ -2122,7 +2122,7 @@ function UserManagement({ users, setUsers, branches }) {
                       setForm({ ...form, password: e.target.value })
                     }
                     minLength="8"
-                    required
+                    required={!form.id}
                   />
                   <button
                     type="button"
@@ -2143,23 +2143,15 @@ function UserManagement({ users, setUsers, branches }) {
                 </select>
               </label>
               {form.role !== "ADMIN" && (
-                <label className="wide">
-                  Sucursal asignada
-                  <select
-                    value={form.branchId}
-                    onChange={(e) =>
-                      setForm({ ...form, branchId: e.target.value })
-                    }
-                  >
-                    {branches
-                      .filter((b) => b.active !== false)
-                      .map((b) => (
-                        <option value={b.id} key={b.id}>
-                          {b.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                <fieldset className="wide branch-assignment">
+                  <legend>Farmacias asignadas</legend>
+                  {branches.filter((b) => b.active !== false).map((b) => (
+                    <label className="check-row" key={b.id}>
+                      <input type="checkbox" checked={form.branchIds?.includes(b.id) || false} onChange={(e) => setForm({...form, branchIds: e.target.checked ? [...(form.branchIds || []), b.id] : (form.branchIds || []).filter((id) => id !== b.id)})} />
+                      {b.name}
+                    </label>
+                  ))}
+                </fieldset>
               )}
             </div>
             <label className="check-row">

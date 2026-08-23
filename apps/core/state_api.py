@@ -184,6 +184,8 @@ class SystemStateView(APIView):
             if created or previous != current or item.get("password"):
                 audit(request, AuditLog.Accion.CREAR if created else AuditLog.Accion.MODIFICAR, "usuario", user, f"Usuario {user.email}", changes={"antes": previous, "despues": current})
             if not user.is_superuser:
+                selected_codes = {str(code).lower() for code in item.get("branchIds", [])}
+                user.asignaciones_farmacia.exclude(farmacia__codigo__in=selected_codes).update(activo=False)
                 for code in item.get("branchIds", []):
                     pharmacy = branch_map.get(str(code).lower())
                     if pharmacy:

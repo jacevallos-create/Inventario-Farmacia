@@ -14,6 +14,7 @@ from apps.inventario.models import InventarioFarmacia, MovimientoInventario
 from apps.lotes.models import Lote
 from apps.medicamentos.models import Medicamento
 from apps.proveedores.models import Proveedor
+from apps.transferencias.models import Transferencia, TransferenciaDetalle
 
 
 def admin_user(user):
@@ -145,3 +146,65 @@ class PurchaseReceiveView(APIView):
         purchase.save(update_fields=["estado", "actualizado_en"])
         audit(request, AuditLog.Accion.MODIFICAR, "compra", purchase, f"Recepción de {purchase.numero}", purchase.farmacia, {"lotes": received_log})
         return Response(serialize_purchase(purchase))
+
+
+def serialize_transfer(row):
+    return {"id": row.id, "number": row.numero, "origin": row.origen.codigo.lower(), "destination": row.destino.codigo.lower(), "status": row.estado, "user": row.solicitado_por.email, "date": timezone.localtime(row.creado_en).isoformat(), "items": [{"product": x.medicamento.nombre_comercial, "sku": x.medicamento.codigo_interno, "lot": x.lote.numero, "quantity": x.cantidad} for x in row.detalles.select_related("medicamento", "lote")]}
+
+
+class TransferListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        rows = Transferencia.objects.select_related("origen", "destino", "solicitado_por").prefetch_related("detalles__medicamento", "detalles__lote")
+        if not admin_user(request.user):
+            rows = rows.filter(origen__usuarios_asignados__usuario=request.user, origen__usuarios_asignados__activo=True)
+        return Response({"transfers": [serialize_transfer(x) for x in rows.order_by("-creado_en").distinct()]})
+
+    @transaction.atomic
+    def post(self, request):
+        origin = Farmacia.objects.filter(codigo__iexact=request.data.get("origin"), activo=True).first()
+        destination = Farmacia.objects.filter(codigo__iexact=request.data.get("destination"), activo=True).first()
+        if not origin or not destination or origin == destination or not pharmacy_access(request.user, origin):
+            return Response({"detail": "Origen o destino inválido."}, status=400)
+        transfer = Transferencia.objects.create(origen=origin, destino=destination, numero=f"TR-{uuid4().hex[:10].upper()}", solicitado_por=request.user, observacion=request.data.get("notes", ""))
+        for data in request.data.get("items") or []:
+            lot = Lote.objects.filter(pk=data.get("lotId"), farmacia=origin, cantidad_disponible__gt=0).select_related("medicamento").first()
+            try: quantity = int(data.get("quantity", 0))
+            except (TypeError, ValueError): quantity = 0
+            if not lot or quantity < 1 or quantity > lot.cantidad_disponible or lot.fecha_vencimiento < timezone.localdate():
+                transaction.set_rollback(True); return Response({"detail": "Lote o cantidad inválida para transferir."}, status=409)
+            TransferenciaDetalle.objects.create(transferencia=transfer, medicamento=lot.medicamento, lote=lot, cantidad=quantity)
+        if not transfer.detalles.exists():
+            transaction.set_rollback(True); return Response({"detail": "La transferencia requiere productos."}, status=400)
+        audit(request, AuditLog.Accion.CREAR, "transferencia", transfer, f"Transferencia {transfer.numero} solicitada", origin)
+        return Response(serialize_transfer(transfer), status=201)
+
+
+class TransferActionView(APIView):
+    permission_classes = [IsAuthenticated]
+    @transaction.atomic
+    def post(self, request, transfer_id, action):
+        transfer = Transferencia.objects.select_for_update().select_related("origen", "destino").filter(pk=transfer_id).first()
+        if not transfer or not admin_user(request.user): return Response({"detail": "Transferencia no disponible."}, status=403)
+        if action == "approve" and transfer.estado == Transferencia.Estado.SOLICITADA:
+            transfer.estado = Transferencia.Estado.APROBADA; transfer.aprobado_por = request.user
+        elif action == "dispatch" and transfer.estado == Transferencia.Estado.APROBADA:
+            for detail in transfer.detalles.select_related("lote", "medicamento"):
+                lot = Lote.objects.select_for_update().get(pk=detail.lote_id)
+                inventory = InventarioFarmacia.objects.select_for_update().get(farmacia=transfer.origen, medicamento=detail.medicamento)
+                if lot.fecha_vencimiento < timezone.localdate() or lot.cantidad_disponible < detail.cantidad or inventory.stock_actual < detail.cantidad:
+                    return Response({"detail": "Stock o lote no disponible para despacho."}, status=409)
+                previous = inventory.stock_actual; lot.cantidad_disponible -= detail.cantidad; inventory.stock_actual -= detail.cantidad; lot.save(); inventory.save()
+                MovimientoInventario.objects.create(farmacia=transfer.origen, medicamento=detail.medicamento, lote=lot, tipo="SALIDA", concepto="TRANSFERENCIA", cantidad=detail.cantidad, saldo_anterior=previous, saldo_nuevo=inventory.stock_actual, costo_unitario=lot.costo_unitario, documento_tipo="TRANSFERENCIA", documento_id=transfer.id, usuario=request.user)
+            transfer.estado = Transferencia.Estado.TRANSITO
+        elif action == "receive" and transfer.estado == Transferencia.Estado.TRANSITO:
+            for detail in transfer.detalles.select_related("lote", "medicamento"):
+                source = detail.lote
+                lot, _ = Lote.objects.select_for_update().get_or_create(farmacia=transfer.destino, medicamento=detail.medicamento, numero=source.numero, defaults={"proveedor": source.proveedor, "fecha_fabricacion": source.fecha_fabricacion, "fecha_vencimiento": source.fecha_vencimiento, "cantidad_inicial": 0, "cantidad_disponible": 0, "costo_unitario": source.costo_unitario})
+                inventory, _ = InventarioFarmacia.objects.select_for_update().get_or_create(farmacia=transfer.destino, medicamento=detail.medicamento)
+                previous = inventory.stock_actual; lot.cantidad_inicial += detail.cantidad; lot.cantidad_disponible += detail.cantidad; inventory.stock_actual += detail.cantidad; lot.save(); inventory.save()
+                MovimientoInventario.objects.create(farmacia=transfer.destino, medicamento=detail.medicamento, lote=lot, tipo="ENTRADA", concepto="TRANSFERENCIA", cantidad=detail.cantidad, saldo_anterior=previous, saldo_nuevo=inventory.stock_actual, costo_unitario=lot.costo_unitario, documento_tipo="TRANSFERENCIA", documento_id=transfer.id, usuario=request.user)
+            transfer.estado = Transferencia.Estado.RECIBIDA
+        else: return Response({"detail": "La acción no corresponde al estado actual."}, status=409)
+        transfer.save(); audit(request, AuditLog.Accion.MODIFICAR, "transferencia", transfer, f"Transferencia {transfer.numero}: {transfer.estado}", transfer.origen)
+        return Response(serialize_transfer(transfer))
