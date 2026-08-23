@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: clinica-sarnosa
+    runtime: python
+    buildCommand: bash build.sh
+    startCommand: gunicorn config.wsgi:application
+    healthCheckPath: /api/v1/health/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.7
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DJANGO_ALLOWED_HOSTS
+        value: localhost
+      - key: TIME_ZONE
+        value: America/Guayaquil
+      - key: ACCOUNT_EMAIL_VERIFICATION
+        value: optional
