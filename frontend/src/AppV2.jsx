@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -2355,9 +2355,7 @@ export default function AppV2() {
     [sidebar, setSidebar] = useState(false),
     [modal, setModal] = useState(false),
     [logoutDialog, setLogoutDialog] = useState(false),
-    [toast, setToast] = useState(""),
-    [globalQuery, setGlobalQuery] = useState("");
-  const searchRef = useRef(null);
+    [toast, setToast] = useState("");
   useEffect(() => {
     fetch("/api/v1/auth/session/", { credentials: "same-origin" })
       .then((response) => response.json())
@@ -2400,16 +2398,6 @@ export default function AppV2() {
     const timer = window.setTimeout(() => setToast(""), 3200);
     return () => window.clearTimeout(timer);
   }, [toast]);
-  useEffect(() => {
-    const shortcut = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", shortcut);
-    return () => window.removeEventListener("keydown", shortcut);
-  }, []);
   if (authChecking)
     return <main className="auth-loading">Verificando sesión segura…</main>;
   if (!currentUser)
@@ -2464,18 +2452,6 @@ export default function AppV2() {
                 </option>
               ))}
           </select>
-          <div className="global-search">
-            <Search />
-            <input
-              ref={searchRef}
-              value={globalQuery}
-              onChange={(e) => setGlobalQuery(e.target.value)}
-              placeholder="Buscar medicamento, SKU o código de barras… (Ctrl+K)"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") setActive("Inventario");
-              }}
-            />
-          </div>
           <button className="top-alert" onClick={() => setActive("Alertas")}>
             <Bell />
             <i>{items.filter((p) => p.stock <= p.min).length}</i>
@@ -2515,7 +2491,7 @@ export default function AppV2() {
               items={items}
               setItems={setItems}
               branchId={branchId}
-              initialQuery={globalQuery}
+              initialQuery=""
               onAdd={() => setModal(true)}
             />
           ) : active === "Sucursales" ? (
