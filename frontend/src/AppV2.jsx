@@ -1240,6 +1240,12 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
 function Dashboard({ items, branch, onInventory, user }) {
   const critical = items.filter((p) => p.stock <= p.min),
     value = items.reduce((s, p) => s + p.stock * p.buyPrice, 0);
+  const [metrics, setMetrics] = useState(null);
+  useEffect(() => {
+    fetch(`/api/v1/dashboard/?branch=${encodeURIComponent(branch.id)}`, { credentials: "same-origin" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => data && setMetrics(data));
+  }, [branch.id]);
   return (
     <>
       <section className="page-heading">
@@ -1258,16 +1264,17 @@ function Dashboard({ items, branch, onInventory, user }) {
           [
             BarChart3,
             "Valor del inventario",
-            money(value),
+            money(metrics?.inventoryValue ?? value),
             "A precio de compra",
           ],
           [
             AlertTriangle,
             "Stock crítico",
-            critical.length,
+            metrics?.critical ?? critical.length,
             "Requieren atención",
           ],
-          [ShoppingCart, "Ventas de hoy", money(1284500), "+12% vs. ayer"],
+          [ShoppingCart, "Ventas de hoy", money(metrics?.salesToday), "Registradas en Supabase"],
+          [AlertTriangle, "Pérdida por vencimiento", money(metrics?.expiredLoss), "Lotes vencidos valorizados"],
         ].map(([Icon, label, value, note], i) => (
           <article className="kpi" key={label}>
             <span className={`kpi-icon c${i}`}>
@@ -1285,13 +1292,13 @@ function Dashboard({ items, branch, onInventory, user }) {
         <section className="panel">
           <header>
             <div>
-              <h3>Movimiento del inventario</h3>
-              <p>Unidades disponibles durante los últimos 6 meses</p>
+              <h3>Comparación entre farmacias</h3>
+              <p>Ventas acumuladas del mes desde Supabase</p>
             </div>
           </header>
           <div className="chart">
             <ResponsiveContainer>
-              <AreaChart data={trend}>
+              <AreaChart data={metrics?.branches || []}>
                 <defs>
                   <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0" stopColor="#2563eb" stopOpacity=".25" />
@@ -1299,11 +1306,11 @@ function Dashboard({ items, branch, onInventory, user }) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke="#e9edf4" />
-                <XAxis dataKey="m" axisLine={false} tickLine={false} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} />
                 <YAxis axisLine={false} tickLine={false} />
                 <Tooltip />
                 <Area
-                  dataKey="v"
+                  dataKey="sales"
                   stroke="#2563eb"
                   strokeWidth={3}
                   fill="url(#area)"
@@ -1551,6 +1558,7 @@ function BranchManager({
 function Purchases({ branch, items, suppliers }) {
   const [purchases, setPurchases] = useState([]),
     [form, setForm] = useState(null),
+    [receiving, setReceiving] = useState(null),
     [busy, setBusy] = useState(false);
   const [askConfirm, actionDialog] = useActionConfirmation();
   const load = async () => {
@@ -1605,6 +1613,17 @@ function Purchases({ branch, items, suppliers }) {
       setBusy(false);
     }
   };
+  const receive = async (event) => {
+    event.preventDefault(); setBusy(true);
+    const response = await fetch(`/api/v1/purchases/${receiving.purchase.id}/receive/`, { method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()}, body:JSON.stringify({items:[{detailId:receiving.detailId,quantity:receiving.quantity,lot:receiving.lot,expires:receiving.expires}]}) });
+    const data=await response.json(); setBusy(false); if(!response.ok)return alert(data.detail);
+    setPurchases(purchases.map(x=>x.id===data.id?data:x)); setReceiving(null);
+  };
+  const cancelPurchase = async (purchase) => {
+    const reason=window.prompt("Motivo de anulación:"); if(!reason)return;
+    if(!await askConfirm({icon:Trash2,tone:"danger",eyebrow:"ANULAR ORDEN",title:`¿Anular ${purchase.number}?`,message:"Se cancelará el saldo pendiente. Las recepciones ya realizadas conservarán su trazabilidad.",confirmLabel:"Anular orden"}))return;
+    const response=await fetch(`/api/v1/purchases/${purchase.id}/cancel/`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()},body:JSON.stringify({reason})});const data=await response.json();if(!response.ok)return alert(data.detail);setPurchases(purchases.map(x=>x.id===data.id?data:x));
+  };
   return (
     <>
       <section className="page-heading">
@@ -1640,6 +1659,7 @@ function Purchases({ branch, items, suppliers }) {
                 <th>Fecha</th>
                 <th>Total</th>
                 <th>Estado</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -1655,6 +1675,7 @@ function Purchases({ branch, items, suppliers }) {
                   <td>
                     <span className="status success">{purchase.status}</span>
                   </td>
+                  <td><div className="row-actions">{!["RECIBIDA","ANULADA"].includes(purchase.status)&&<button title="Recibir" onClick={()=>{const detail=purchase.items.find(x=>x.received<x.ordered);setReceiving({purchase,detailId:detail?.id,quantity:detail?detail.ordered-detail.received:1,lot:"",expires:""});}}><Package/></button>}{!["RECIBIDA","ANULADA"].includes(purchase.status)&&<button className="delete" title="Anular" onClick={()=>cancelPurchase(purchase)}><Trash2/></button>}</div></td>
                 </tr>
               ))}
             </tbody>
@@ -1744,6 +1765,7 @@ function Purchases({ branch, items, suppliers }) {
           </form>
         </SimpleModal>
       )}
+      {receiving && <SimpleModal title={`Recibir ${receiving.purchase.number}`} onClose={()=>setReceiving(null)}><form className="simple-form" onSubmit={receive}><div className="form-grid"><label>Producto<select value={receiving.detailId} onChange={e=>setReceiving({...receiving,detailId:e.target.value})}>{receiving.purchase.items.filter(x=>x.received<x.ordered).map(x=><option value={x.id} key={x.id}>{x.product} · pendiente {x.ordered-x.received}</option>)}</select></label><label>Cantidad<input type="number" min="1" required value={receiving.quantity} onChange={e=>setReceiving({...receiving,quantity:e.target.value})}/></label><label>Número de lote<input required value={receiving.lot} onChange={e=>setReceiving({...receiving,lot:e.target.value})}/></label><label>Vencimiento<input type="date" required value={receiving.expires} onChange={e=>setReceiving({...receiving,expires:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setReceiving(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Recibiendo…":"Confirmar recepción"}</button></footer></form></SimpleModal>}
       {actionDialog}
     </>
   );
@@ -1935,6 +1957,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
           productId: product.id,
           qty,
           customer: form.customer,
+          payment: form.payment,
         }),
       });
       const data = await response.json();
@@ -1969,7 +1992,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
           className="button primary"
           disabled={!items.length}
           onClick={() =>
-            setForm({ productId: items[0]?.id, qty: 1, customer: "" })
+            setForm({ productId: items[0]?.id, qty: 1, customer: "", payment: "EFECTIVO" })
           }
         >
           <Plus />
@@ -2008,6 +2031,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
                 <th>Cliente</th>
                 <th>Cantidad</th>
                 <th>Total</th>
+                <th>Pago</th>
               </tr>
             </thead>
             <tbody>
@@ -2023,6 +2047,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
                   <td>
                     <b>{money(s.total)}</b>
                   </td>
+                  <td>{s.payment || "No registrado"}</td>
                 </tr>
               ))}
             </tbody>
@@ -2075,6 +2100,14 @@ function Sales({ items, setItems, sales, setSales, branch }) {
                   }
                   placeholder="Consumidor final"
                 />
+              </label>
+              <label>
+                Forma de pago
+                <select value={form.payment} onChange={(e) => setForm({ ...form, payment: e.target.value })}>
+                  <option value="EFECTIVO">Efectivo</option>
+                  <option value="TARJETA">Tarjeta</option>
+                  <option value="TRANSFERENCIA">Transferencia</option>
+                </select>
               </label>
             </div>
             <div className="sale-total">

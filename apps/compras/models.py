@@ -28,3 +28,18 @@ class CompraDetalle(TimeStampedModel):
     costo_unitario = models.DecimalField(max_digits=12, decimal_places=4, validators=[MinValueValidator(0)])
     class Meta:
         constraints = [models.UniqueConstraint(fields=["compra", "medicamento"], name="uq_compra_medicamento")]
+
+
+class DevolucionProveedor(TimeStampedModel):
+    compra = models.ForeignKey(Compra, on_delete=models.PROTECT, related_name="devoluciones")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    autorizada_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="devoluciones_proveedor_autorizadas")
+    motivo = models.CharField(max_length=255)
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+
+class DevolucionProveedorDetalle(TimeStampedModel):
+    devolucion = models.ForeignKey(DevolucionProveedor, on_delete=models.CASCADE, related_name="detalles")
+    lote = models.ForeignKey("lotes.Lote", on_delete=models.PROTECT, related_name="devoluciones_proveedor")
+    cantidad = models.PositiveIntegerField()
+    costo_unitario = models.DecimalField(max_digits=12, decimal_places=4, validators=[MinValueValidator(0)])

@@ -52,6 +52,7 @@ def serialize_purchase(purchase):
             "product": item.medicamento.nombre_comercial, "ordered": item.cantidad_solicitada,
             "received": item.cantidad_recibida, "cost": float(item.costo_unitario),
         } for item in purchase.detalles.select_related("medicamento")],
+        "receipts": [{"date": timezone.localtime(move.creado_en).isoformat(), "sku": move.medicamento.codigo_interno, "product": move.medicamento.nombre_comercial, "lot": move.lote.numero if move.lote else "", "quantity": move.cantidad, "user": move.usuario.email} for move in MovimientoInventario.objects.filter(documento_tipo="COMPRA", documento_id=purchase.id).select_related("medicamento", "lote", "usuario")],
     }
 
 
@@ -146,6 +147,20 @@ class PurchaseReceiveView(APIView):
         purchase.estado = Compra.Estado.RECIBIDA if all(x.cantidad_recibida == x.cantidad_solicitada for x in details) else Compra.Estado.PARCIAL
         purchase.save(update_fields=["estado", "actualizado_en"])
         audit(request, AuditLog.Accion.MODIFICAR, "compra", purchase, f"Recepción de {purchase.numero}", purchase.farmacia, {"lotes": received_log})
+        return Response(serialize_purchase(purchase))
+
+
+class PurchaseCancelView(APIView):
+    permission_classes = [IsAuthenticated]
+    @transaction.atomic
+    def post(self, request, purchase_id):
+        if not admin_user(request.user): return Response({"detail": "La anulación requiere autorización administrativa."}, status=403)
+        purchase = Compra.objects.select_for_update().select_related("farmacia", "proveedor", "usuario").filter(pk=purchase_id).first()
+        reason = str(request.data.get("reason") or "").strip()
+        if not purchase or purchase.estado in (Compra.Estado.RECIBIDA, Compra.Estado.ANULADA) or not reason:
+            return Response({"detail": "La orden no puede anularse o falta el motivo."}, status=409)
+        purchase.estado = Compra.Estado.ANULADA; purchase.observacion = f"{purchase.observacion}\nANULADA: {reason}".strip(); purchase.save()
+        audit(request, AuditLog.Accion.MODIFICAR, "compra", purchase, f"Orden {purchase.numero} anulada", purchase.farmacia, {"motivo": reason})
         return Response(serialize_purchase(purchase))
 
 

@@ -89,7 +89,7 @@ class SmokeTests(TestCase):
         medicine_id = state["inventories"]["central"][0]["id"]
         lot = Lote.objects.get(medicamento_id=medicine_id)
         response = self.client.post("/api/v1/sales/", {
-            "branchId": "central", "productId": medicine_id, "qty": 3, "customer": "Paciente"
+            "branchId": "central", "productId": medicine_id, "qty": 3, "customer": "Paciente", "payment": "TRANSFERENCIA"
         }, content_type="application/json")
         self.assertEqual(response.status_code, 201, response.json())
         lot.refresh_from_db()

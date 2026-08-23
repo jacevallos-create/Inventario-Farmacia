@@ -3,6 +3,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 from django.db import transaction
+from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 from django.http import HttpResponse
 from django.utils import timezone
 from openpyxl import Workbook
@@ -12,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.auditoria.models import AuditLog
+from apps.cajas.models import MovimientoCaja, SesionCaja
 from apps.farmacias.models import Farmacia
 from apps.inventario.models import InventarioFarmacia, MovimientoInventario
 from apps.lotes.models import Lote
@@ -52,6 +54,12 @@ class SaleCreateView(APIView):
         ).first()
         if not inventory or inventory.stock_actual < quantity:
             return Response({"detail": "No hay existencias suficientes."}, status=409)
+        payment = str(request.data.get("payment") or "EFECTIVO").upper()
+        if payment not in ("EFECTIVO", "TARJETA", "TRANSFERENCIA"):
+            return Response({"detail": "La forma de pago no es válida."}, status=400)
+        cash_session = SesionCaja.objects.select_for_update().filter(usuario=request.user, caja__farmacia=pharmacy, cerrada_en__isnull=True).first()
+        if payment == "EFECTIVO" and not cash_session:
+            return Response({"detail": "Debes abrir una caja antes de registrar ventas en efectivo."}, status=409)
 
         today = timezone.localdate()
         lots = list(Lote.objects.select_for_update().filter(
@@ -67,6 +75,7 @@ class SaleCreateView(APIView):
             usuario=request.user, cliente_nombre=request.data.get("customer") or "Consumidor final",
             cantidad=quantity, precio_unitario=inventory.precio_venta,
             total=inventory.precio_venta * quantity,
+            forma_pago=payment, sesion_caja=cash_session,
         )
         remaining = quantity
         previous_total = inventory.stock_actual
@@ -91,15 +100,42 @@ class SaleCreateView(APIView):
 
         inventory.stock_actual -= quantity
         inventory.save(update_fields=["stock_actual", "actualizado_en"])
+        if cash_session:
+            MovimientoCaja.objects.create(sesion=cash_session, tipo=MovimientoCaja.Tipo.VENTA, forma_pago=payment, monto=sale.total, referencia=reference, usuario=request.user, observacion=f"Venta {reference}")
         audit(request, AuditLog.Accion.CREAR, "venta", sale, f"Venta {reference}", pharmacy, {"cantidad": quantity, "lotes": consumed})
         return Response({
             "sale": {"id": sale.referencia_cliente, "branchId": pharmacy.codigo.lower(),
                      "product": inventory.medicamento.nombre_comercial, "sku": inventory.medicamento.codigo_interno,
                      "qty": quantity, "total": float(sale.total), "customer": sale.cliente_nombre,
                      "date": timezone.localtime(sale.creado_en).strftime("%d/%m/%Y, %H:%M"), "lots": consumed,
-                     "user": request.user.email},
+                     "user": request.user.email, "payment": payment, "cancelled": False},
             "stock": inventory.stock_actual,
         }, status=201)
+
+
+class SaleCancelView(APIView):
+    permission_classes = [IsAuthenticated]
+    @transaction.atomic
+    def post(self, request, sale_id):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"detail": "La anulación requiere autorización administrativa."}, status=403)
+        sale = Venta.objects.select_for_update().select_related("farmacia", "medicamento", "sesion_caja").filter(referencia_cliente=sale_id).first()
+        reason = str(request.data.get("reason") or "").strip()
+        if not sale or sale.anulada or not reason:
+            return Response({"detail": "Venta no disponible o motivo obligatorio ausente."}, status=409)
+        inventory = InventarioFarmacia.objects.select_for_update().get(farmacia=sale.farmacia, medicamento=sale.medicamento)
+        previous = inventory.stock_actual
+        for detail in sale.lotes_consumidos.select_related("lote"):
+            lot = Lote.objects.select_for_update().get(pk=detail.lote_id)
+            lot.cantidad_disponible += detail.cantidad; lot.save()
+            MovimientoInventario.objects.create(farmacia=sale.farmacia, medicamento=sale.medicamento, lote=lot, tipo="ENTRADA", concepto="ANULACION_VENTA", cantidad=detail.cantidad, saldo_anterior=inventory.stock_actual, saldo_nuevo=inventory.stock_actual + detail.cantidad, costo_unitario=lot.costo_unitario, documento_tipo="VENTA", documento_id=sale.id, usuario=request.user, observacion=reason)
+            inventory.stock_actual += detail.cantidad
+        inventory.save()
+        if sale.sesion_caja and not sale.sesion_caja.cerrada_en:
+            MovimientoCaja.objects.create(sesion=sale.sesion_caja, tipo=MovimientoCaja.Tipo.DEVOLUCION, forma_pago=sale.forma_pago, monto=sale.total, referencia=sale.referencia_cliente, usuario=request.user, observacion=f"Anulación: {reason}")
+        sale.anulada=True; sale.anulada_por=request.user; sale.anulada_en=timezone.now(); sale.motivo_anulacion=reason; sale.save()
+        audit(request, AuditLog.Accion.MODIFICAR, "venta", sale, f"Venta {sale.referencia_cliente} anulada", sale.farmacia, {"motivo": reason, "stock_anterior": previous, "stock_nuevo": inventory.stock_actual})
+        return Response({"id": sale.referencia_cliente, "cancelled": True, "stock": inventory.stock_actual})
 
 
 class LotAlertsView(APIView):
@@ -181,3 +217,22 @@ class ExcelReportView(APIView):
 
 def today_string():
     return timezone.localdate().isoformat()
+
+
+class DashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        branch = request.query_params.get("branch")
+        inventories = InventarioFarmacia.objects.select_related("farmacia", "medicamento")
+        sales = Venta.objects.filter(anulada=False)
+        lots = Lote.objects.filter(cantidad_disponible__gt=0)
+        if branch and branch != "ALL":
+            inventories=inventories.filter(farmacia__codigo__iexact=branch); sales=sales.filter(farmacia__codigo__iexact=branch); lots=lots.filter(farmacia__codigo__iexact=branch)
+        today=timezone.localdate(); month_start=today.replace(day=1)
+        value_expr=ExpressionWrapper(F("stock_actual")*F("precio_compra"),output_field=DecimalField(max_digits=18,decimal_places=2))
+        expired_expr=ExpressionWrapper(F("cantidad_disponible")*F("costo_unitario"),output_field=DecimalField(max_digits=18,decimal_places=2))
+        branch_rows=[]
+        for pharmacy in Farmacia.objects.filter(activo=True):
+            inv=inventories.filter(farmacia=pharmacy); branch_sales=sales.filter(farmacia=pharmacy,creado_en__date__gte=month_start)
+            branch_rows.append({"id":pharmacy.codigo.lower(),"name":pharmacy.nombre,"stock":sum(x.stock_actual for x in inv),"inventoryValue":float(inv.aggregate(v=Sum(value_expr))["v"] or 0),"sales":float(branch_sales.aggregate(v=Sum("total"))["v"] or 0)})
+        return Response({"salesToday":float(sales.filter(creado_en__date=today).aggregate(v=Sum("total"))["v"] or 0),"salesMonth":float(sales.filter(creado_en__date__gte=month_start).aggregate(v=Sum("total"))["v"] or 0),"inventoryValue":float(inventories.aggregate(v=Sum(value_expr))["v"] or 0),"expiredLoss":float(lots.filter(fecha_vencimiento__lt=today).aggregate(v=Sum(expired_expr))["v"] or 0),"critical":inventories.filter(stock_actual__lte=F("stock_minimo")).count(),"branches":branch_rows})

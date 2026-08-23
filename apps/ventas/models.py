@@ -14,6 +14,12 @@ class Venta(TimeStampedModel):
     cantidad = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     precio_unitario = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
     total = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(0)])
+    forma_pago = models.CharField(max_length=20, choices=[("EFECTIVO", "Efectivo"), ("TARJETA", "Tarjeta"), ("TRANSFERENCIA", "Transferencia")], default="EFECTIVO")
+    sesion_caja = models.ForeignKey("cajas.SesionCaja", null=True, blank=True, on_delete=models.PROTECT, related_name="ventas")
+    anulada = models.BooleanField(default=False, db_index=True)
+    anulada_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="ventas_anuladas")
+    anulada_en = models.DateTimeField(null=True, blank=True)
+    motivo_anulacion = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-creado_en"]
@@ -37,6 +43,12 @@ class DevolucionVenta(TimeStampedModel):
     motivo = models.CharField(max_length=255)
     autorizada_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="devoluciones_autorizadas")
     total_devuelto = models.DecimalField(max_digits=14, decimal_places=2)
+
+
+class DevolucionVentaLote(TimeStampedModel):
+    devolucion = models.ForeignKey(DevolucionVenta, on_delete=models.CASCADE, related_name="lotes_repuestos")
+    lote = models.ForeignKey("lotes.Lote", on_delete=models.PROTECT, related_name="devoluciones_cliente")
+    cantidad = models.PositiveIntegerField(validators=[MinValueValidator(1)])
 
 
 class ComprobanteElectronico(TimeStampedModel):

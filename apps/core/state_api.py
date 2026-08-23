@@ -67,6 +67,7 @@ def serialize_state(request):
         "product": sale.medicamento.nombre_comercial, "sku": sale.medicamento.codigo_interno,
         "qty": sale.cantidad, "total": float(sale.total), "customer": sale.cliente_nombre,
         "date": sale.creado_en.strftime("%d/%m/%Y, %H:%M"),
+        "payment": sale.forma_pago, "cancelled": sale.anulada,
     } for sale in Venta.objects.filter(farmacia_id__in=branch_ids).select_related("farmacia", "medicamento")]
     users = []
     if is_admin:

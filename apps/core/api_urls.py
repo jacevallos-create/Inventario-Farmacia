@@ -6,8 +6,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .state_api import StateRecordView, SystemStateView
-from .operations_api import ExcelReportView, LotAlertsView, SaleCreateView
-from .business_api import AvailableLotsView, CashCloseView, CashMovementView, CashSessionView, PurchaseListCreateView, PurchaseReceiveView, TransferActionView, TransferListCreateView
+from .operations_api import DashboardView, ExcelReportView, LotAlertsView, SaleCancelView, SaleCreateView
+from .business_api import AvailableLotsView, CashCloseView, CashMovementView, CashSessionView, PurchaseCancelView, PurchaseListCreateView, PurchaseReceiveView, TransferActionView, TransferListCreateView
 
 
 class HealthView(APIView):
@@ -82,10 +82,13 @@ urlpatterns = [
     path("state/", SystemStateView.as_view(), name="api-state"),
     path("state/<str:resource>/<str:identifier>/", StateRecordView.as_view(), name="api-state-record"),
     path("sales/", SaleCreateView.as_view(), name="api-sales"),
+    path("sales/<str:sale_id>/cancel/", SaleCancelView.as_view(), name="api-sale-cancel"),
     path("lots/alerts/", LotAlertsView.as_view(), name="api-lot-alerts"),
     path("reports/excel/", ExcelReportView.as_view(), name="api-excel-report"),
+    path("dashboard/", DashboardView.as_view(), name="api-dashboard"),
     path("purchases/", PurchaseListCreateView.as_view(), name="api-purchases"),
     path("purchases/<int:purchase_id>/receive/", PurchaseReceiveView.as_view(), name="api-purchase-receive"),
+    path("purchases/<int:purchase_id>/cancel/", PurchaseCancelView.as_view(), name="api-purchase-cancel"),
     path("transfers/", TransferListCreateView.as_view(), name="api-transfers"),
     path("transfers/lots/", AvailableLotsView.as_view(), name="api-transfer-lots"),
     path("transfers/<int:transfer_id>/<str:action>/", TransferActionView.as_view(), name="api-transfer-action"),
