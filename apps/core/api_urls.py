@@ -28,13 +28,14 @@ class SessionView(APIView):
         assignments = request.user.asignaciones_farmacia.filter(activo=True).select_related("farmacia")
         branch_ids = [assignment.farmacia.codigo.lower() for assignment in assignments]
         is_admin = request.user.is_staff or request.user.is_superuser
+        primary_assignment = assignments.first()
         return Response({
             "authenticated": True,
             "user": {
                 "id": request.user.pk,
                 "name": request.user.get_full_name() or request.user.email.split("@")[0],
                 "email": request.user.email,
-                "role": "ADMIN" if is_admin else "INVENTARIO",
+                "role": "ADMIN" if is_admin else (primary_assignment.rol if primary_assignment else "CONSULTA"),
                 "branchIds": branch_ids or (["central"] if not is_admin else []),
                 "active": request.user.is_active,
             },
@@ -64,11 +65,12 @@ class LoginView(APIView):
         assignments = user.asignaciones_farmacia.filter(activo=True).select_related("farmacia")
         branch_ids = [assignment.farmacia.codigo.lower() for assignment in assignments]
         is_admin = user.is_staff or user.is_superuser
+        primary_assignment = assignments.first()
         return Response({"authenticated": True, "user": {
             "id": user.pk,
             "name": user.get_full_name() or user.email.split("@")[0],
             "email": user.email,
-            "role": "ADMIN" if is_admin else "INVENTARIO",
+            "role": "ADMIN" if is_admin else (primary_assignment.rol if primary_assignment else "CONSULTA"),
             "branchIds": branch_ids or (["central"] if not is_admin else []),
             "active": user.is_active,
         }})

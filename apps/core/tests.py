@@ -32,6 +32,15 @@ class SmokeTests(TestCase):
         response = self.client.get("/api/v1/auth/session/")
         self.assertTrue(response.json()["authenticated"])
         self.assertEqual(response.json()["user"]["email"], self.user.email)
+        self.assertEqual(response.json()["user"]["role"], UsuarioFarmacia.Rol.ADMIN)
+
+    def test_session_api_preserves_assigned_operational_role(self):
+        assignment = self.user.asignaciones_farmacia.get(farmacia=self.farmacia)
+        assignment.rol = UsuarioFarmacia.Rol.CAJERO
+        assignment.save(update_fields=["rol"])
+        self.client.force_login(self.user)
+        response = self.client.get("/api/v1/auth/session/")
+        self.assertEqual(response.json()["user"]["role"], UsuarioFarmacia.Rol.CAJERO)
 
     def test_logout_api_closes_session(self):
         self.client.force_login(self.user)

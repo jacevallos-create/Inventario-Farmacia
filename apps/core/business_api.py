@@ -22,6 +22,10 @@ def admin_user(user):
     return user.is_staff or user.is_superuser
 
 
+def user_has_role(user, *roles):
+    return admin_user(user) or user.asignaciones_farmacia.filter(activo=True, rol__in=roles).exists()
+
+
 def pharmacy_access(user, pharmacy):
     return admin_user(user) or user.asignaciones_farmacia.filter(farmacia=pharmacy, activo=True).exists()
 
@@ -67,13 +71,15 @@ class PurchaseListCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        if not admin_user(request.user):
-            return Response({"detail": "Solo administradores pueden crear órdenes de compra."}, status=403)
+        if not user_has_role(request.user, "FARMACEUTICO", "INVENTARIO"):
+            return Response({"detail": "Tu rol no permite crear órdenes de compra."}, status=403)
         pharmacy = Farmacia.objects.filter(codigo__iexact=request.data.get("branchId"), activo=True).first()
         supplier = Proveedor.objects.filter(pk=request.data.get("supplierId"), activo=True).first()
         items = request.data.get("items") or []
         if not pharmacy or not supplier or not items:
             return Response({"detail": "Sucursal, proveedor y productos son obligatorios."}, status=400)
+        if not pharmacy_access(request.user, pharmacy):
+            return Response({"detail": "No tienes acceso a esta sucursal."}, status=403)
         purchase = Compra.objects.create(
             farmacia=pharmacy, proveedor=supplier, numero=request.data.get("number") or f"OC-{uuid4().hex[:10].upper()}",
             estado=Compra.Estado.ORDENADA, usuario=request.user, observacion=request.data.get("notes", ""),
@@ -101,9 +107,11 @@ class PurchaseReceiveView(APIView):
 
     @transaction.atomic
     def post(self, request, purchase_id):
-        if not admin_user(request.user):
-            return Response({"detail": "Solo administradores pueden recibir compras."}, status=403)
+        if not user_has_role(request.user, "FARMACEUTICO", "INVENTARIO"):
+            return Response({"detail": "Tu rol no permite recibir compras."}, status=403)
         purchase = Compra.objects.select_for_update().select_related("farmacia", "proveedor", "usuario").filter(pk=purchase_id).first()
+        if purchase and not pharmacy_access(request.user, purchase.farmacia):
+            return Response({"detail": "No tienes acceso a esta sucursal."}, status=403)
         if not purchase or purchase.estado in (Compra.Estado.RECIBIDA, Compra.Estado.ANULADA):
             return Response({"detail": "La orden no está disponible para recepción."}, status=409)
         receptions = request.data.get("items") or []

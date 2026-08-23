@@ -109,26 +109,7 @@ const defaultSuppliers = [
     active: true,
   },
 ];
-const defaultUsers = [
-  {
-    id: 1,
-    name: "Administrador PharmaSys",
-    email: "admin@pharmasys.com",
-    password: "Admin2026!",
-    role: "ADMIN",
-    branchIds: ["central", "norte", "sur"],
-    active: true,
-  },
-  {
-    id: 2,
-    name: "Encargado Central",
-    email: "inventario.central@pharmasys.com",
-    password: "Inventario2026!",
-    role: "INVENTARIO",
-    branchIds: ["central"],
-    active: true,
-  },
-];
+const defaultUsers = [];
 const labs = [
   "Bayer",
   "Pfizer",
@@ -288,6 +269,36 @@ const nav = [
   ["Usuarios y Accesos", Users],
   ["Reportes", BarChart3],
 ];
+const ROLE_LABELS = {
+  SUPERADMIN: "Superadministrador",
+  ADMIN: "Administrador",
+  FARMACEUTICO: "Farmaceutico",
+  INVENTARIO: "Encargado de inventario",
+  CAJERO: "Cajero / vendedor",
+  CONSULTA: "Consulta",
+};
+const ROLE_MODULES = {
+  FARMACEUTICO: [
+    "Dashboard",
+    "Inventario",
+    "Punto de Venta (POS)",
+    "Proveedores",
+    "Compras",
+    "Transferencias",
+    "Caja",
+  ],
+  INVENTARIO: [
+    "Dashboard",
+    "Inventario",
+    "Proveedores",
+    "Compras",
+    "Transferencias",
+  ],
+  CAJERO: ["Dashboard", "Punto de Venta (POS)", "Caja"],
+  CONSULTA: ["Dashboard", "Inventario"],
+};
+const isAdminRole = (role) => ["ADMIN", "SUPERADMIN"].includes(role);
+const roleLabel = (role) => ROLE_LABELS[role] || "Usuario";
 const trend = [
   { m: "Mar", v: 980 },
   { m: "Abr", v: 1120 },
@@ -780,7 +791,6 @@ function CredentialLogin({ onLogin }) {
             />
             Continuar con Google
           </button>
-          <p className="demo-access">Admin: admin@pharmasys.com · Admin2026!</p>
           <p className="legal">
             Al continuar, aceptas los <a>Términos</a> y la{" "}
             <a>Política de privacidad</a>.
@@ -996,12 +1006,10 @@ function MedicineModal({ medicine, onClose, onSave }) {
 }
 
 function Sidebar({ active, setActive, open, setOpen, user }) {
-  const visible =
-    user.role === "ADMIN"
-      ? nav
-      : nav.filter(([label]) =>
-          ["Dashboard", "Inventario", "Punto de Venta (POS)"].includes(label),
-        );
+  const allowedModules = ROLE_MODULES[user.role] || ROLE_MODULES.CONSULTA;
+  const visible = isAdminRole(user.role)
+    ? nav
+    : nav.filter(([label]) => allowedModules.includes(label));
   return (
     <>
       <div
@@ -1036,12 +1044,12 @@ function Sidebar({ active, setActive, open, setOpen, user }) {
         <div className="help">
           <Users size={20} />
           <b>
-            {user.role === "ADMIN"
+            {isAdminRole(user.role)
               ? "Acceso administrador"
-              : "Acceso de inventario"}
+              : roleLabel(user.role)}
           </b>
           <p>
-            {user.role === "ADMIN"
+            {isAdminRole(user.role)
               ? "Gestiona todas las sedes y sus usuarios."
               : "Solo puedes operar la sucursal asignada."}
           </p>
@@ -1096,7 +1104,19 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
     }
   };
   const restock = (p) => setRestocking({ product: p, amount: 10 });
-  const applyRestock = (event) => { event.preventDefault(); const amount=Number(restocking.amount); if(amount>0)setItems(items.map(x=>x.id===restocking.product.id?{...x,stock:x.stock+amount}:x)); setRestocking(null); };
+  const applyRestock = (event) => {
+    event.preventDefault();
+    const amount = Number(restocking.amount);
+    if (amount > 0)
+      setItems(
+        items.map((x) =>
+          x.id === restocking.product.id
+            ? { ...x, stock: x.stock + amount }
+            : x,
+        ),
+      );
+    setRestocking(null);
+  };
   return (
     <>
       <section className="page-heading">
@@ -1251,7 +1271,40 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
           onSave={save}
         />
       )}
-      {restocking&&<SimpleModal title={`Reabastecer ${restocking.product.name}`} onClose={()=>setRestocking(null)}><form className="simple-form" onSubmit={applyRestock}><div className="form-grid"><label className="wide">Cantidad a ingresar<input autoFocus type="number" min="1" required value={restocking.amount} onChange={e=>setRestocking({...restocking,amount:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setRestocking(null)}>Cancelar</button><button className="button primary">Confirmar ingreso</button></footer></form></SimpleModal>}
+      {restocking && (
+        <SimpleModal
+          title={`Reabastecer ${restocking.product.name}`}
+          onClose={() => setRestocking(null)}
+        >
+          <form className="simple-form" onSubmit={applyRestock}>
+            <div className="form-grid">
+              <label className="wide">
+                Cantidad a ingresar
+                <input
+                  autoFocus
+                  type="number"
+                  min="1"
+                  required
+                  value={restocking.amount}
+                  onChange={(e) =>
+                    setRestocking({ ...restocking, amount: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setRestocking(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary">Confirmar ingreso</button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
       {deleteDialog}
     </>
   );
@@ -1678,7 +1731,9 @@ function Purchases({ branch, items, suppliers }) {
     setReceiving(null);
   };
   const cancelPurchase = async (event) => {
-    event.preventDefault(); const purchase=cancellation.purchase, reason=cancellation.reason;
+    event.preventDefault();
+    const purchase = cancellation.purchase,
+      reason = cancellation.reason;
     if (
       !(await askConfirm({
         icon: Trash2,
@@ -1702,7 +1757,8 @@ function Purchases({ branch, items, suppliers }) {
     });
     const data = await response.json();
     if (!response.ok) return systemNotice(data.detail);
-    setPurchases(purchases.map((x) => (x.id === data.id ? data : x))); setCancellation(null);
+    setPurchases(purchases.map((x) => (x.id === data.id ? data : x)));
+    setCancellation(null);
   };
   const returnSupplier = async (event) => {
     event.preventDefault();
@@ -1833,7 +1889,9 @@ function Purchases({ branch, items, suppliers }) {
                         <button
                           className="delete"
                           title="Anular"
-                          onClick={() => setCancellation({ purchase, reason: "" })}
+                          onClick={() =>
+                            setCancellation({ purchase, reason: "" })
+                          }
                         >
                           <Trash2 />
                         </button>
@@ -2071,7 +2129,38 @@ function Purchases({ branch, items, suppliers }) {
           </form>
         </SimpleModal>
       )}
-      {cancellation&&<SimpleModal title={`Anular ${cancellation.purchase.number}`} onClose={()=>setCancellation(null)}><form className="simple-form" onSubmit={cancelPurchase}><div className="form-grid"><label className="wide">Motivo de anulación<input autoFocus required value={cancellation.reason} onChange={e=>setCancellation({...cancellation,reason:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setCancellation(null)}>Cancelar</button><button className="button danger">Continuar</button></footer></form></SimpleModal>}
+      {cancellation && (
+        <SimpleModal
+          title={`Anular ${cancellation.purchase.number}`}
+          onClose={() => setCancellation(null)}
+        >
+          <form className="simple-form" onSubmit={cancelPurchase}>
+            <div className="form-grid">
+              <label className="wide">
+                Motivo de anulación
+                <input
+                  autoFocus
+                  required
+                  value={cancellation.reason}
+                  onChange={(e) =>
+                    setCancellation({ ...cancellation, reason: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setCancellation(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button danger">Continuar</button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
       {actionDialog}
     </>
   );
@@ -2596,9 +2685,20 @@ function Sales({ items, setItems, sales, setSales, branch }) {
 function Alerts({ items, setItems, branch, lotAlerts }) {
   const alerts = items.filter((p) => p.stock <= p.min);
   const expiring = lotAlerts.filter((lot) => lot.branchId === branch.id);
-  const [restocking,setRestocking]=useState(null);
-  const restock = (p) => setRestocking({product:p,amount:Math.max(p.min*2-p.stock,1)});
-  const applyRestock=(event)=>{event.preventDefault();const qty=Number(restocking.amount);if(qty>0)setItems(items.map(x=>x.id===restocking.product.id?{...x,stock:x.stock+qty}:x));setRestocking(null);};
+  const [restocking, setRestocking] = useState(null);
+  const restock = (p) =>
+    setRestocking({ product: p, amount: Math.max(p.min * 2 - p.stock, 1) });
+  const applyRestock = (event) => {
+    event.preventDefault();
+    const qty = Number(restocking.amount);
+    if (qty > 0)
+      setItems(
+        items.map((x) =>
+          x.id === restocking.product.id ? { ...x, stock: x.stock + qty } : x,
+        ),
+      );
+    setRestocking(null);
+  };
   return (
     <>
       <section className="page-heading">
@@ -2610,7 +2710,40 @@ function Alerts({ items, setItems, branch, lotAlerts }) {
           </p>
         </div>
       </section>
-      {restocking&&<SimpleModal title={`Reabastecer ${restocking.product.name}`} onClose={()=>setRestocking(null)}><form className="simple-form" onSubmit={applyRestock}><div className="form-grid"><label className="wide">Cantidad a ingresar<input autoFocus type="number" min="1" required value={restocking.amount} onChange={e=>setRestocking({...restocking,amount:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setRestocking(null)}>Cancelar</button><button className="button primary">Confirmar ingreso</button></footer></form></SimpleModal>}
+      {restocking && (
+        <SimpleModal
+          title={`Reabastecer ${restocking.product.name}`}
+          onClose={() => setRestocking(null)}
+        >
+          <form className="simple-form" onSubmit={applyRestock}>
+            <div className="form-grid">
+              <label className="wide">
+                Cantidad a ingresar
+                <input
+                  autoFocus
+                  type="number"
+                  min="1"
+                  required
+                  value={restocking.amount}
+                  onChange={(e) =>
+                    setRestocking({ ...restocking, amount: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setRestocking(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary">Confirmar ingreso</button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
       <section className="table-card">
         <div className="table-title">
           <div>
@@ -3163,12 +3296,15 @@ function UserManagement({ users, setUsers, branches }) {
   const [askDelete, deleteDialog] = useDeleteConfirmation();
   const save = (e) => {
     e.preventDefault();
-    if (form.role !== "ADMIN" && !form.branchIds?.length)
-      return systemNotice("Selecciona al menos una farmacia para este usuario.");
+    if (!isAdminRole(form.role) && !form.branchIds?.length)
+      return systemNotice(
+        "Selecciona al menos una farmacia para este usuario.",
+      );
     const payload = {
       ...form,
-      branchIds:
-        form.role === "ADMIN" ? branches.map((b) => b.id) : form.branchIds,
+      branchIds: isAdminRole(form.role)
+        ? branches.map((b) => b.id)
+        : form.branchIds,
       active: form.active !== false,
     };
     if (form.id) setUsers(users.map((u) => (u.id === form.id ? payload : u)));
@@ -3243,14 +3379,10 @@ function UserManagement({ users, setUsers, branches }) {
                     </div>
                   </td>
                   <td>
-                    <span className="lab-badge">
-                      {u.role === "ADMIN"
-                        ? "Administrador"
-                        : "Encargado de inventario"}
-                    </span>
+                    <span className="lab-badge">{roleLabel(u.role)}</span>
                   </td>
                   <td>
-                    {u.role === "ADMIN"
+                    {isAdminRole(u.role)
                       ? "Todas las sucursales"
                       : u.branchIds
                           .map((id) => branches.find((b) => b.id === id)?.name)
@@ -3286,7 +3418,7 @@ function UserManagement({ users, setUsers, branches }) {
       </section>
       {form && (
         <SimpleModal
-          title={form.id ? "Editar credenciales" : "Crear credenciales"}
+          title={form.id ? "Editar usuario" : "Crear usuario"}
           onClose={() => setForm(null)}
         >
           <form className="simple-form" onSubmit={save}>
@@ -3313,7 +3445,7 @@ function UserManagement({ users, setUsers, branches }) {
                 <div className="password-field">
                   <input
                     type={showPassword ? "text" : "password"}
-                    value={form.password}
+                    value={form.password || ""}
                     onChange={(e) =>
                       setForm({ ...form, password: e.target.value })
                     }
@@ -3335,10 +3467,13 @@ function UserManagement({ users, setUsers, branches }) {
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                 >
                   <option value="INVENTARIO">Encargado de inventario</option>
+                  <option value="FARMACEUTICO">Farmaceutico</option>
+                  <option value="CAJERO">Cajero / vendedor</option>
+                  <option value="CONSULTA">Solo consulta</option>
                   <option value="ADMIN">Administrador</option>
                 </select>
               </label>
-              {form.role !== "ADMIN" && (
+              {!isAdminRole(form.role) && (
                 <fieldset className="wide branch-assignment">
                   <legend>Farmacias asignadas</legend>
                   {branches
@@ -3736,7 +3871,11 @@ export default function AppV2() {
     [globalNotice, setGlobalNotice] = useState(""),
     [toast, setToast] = useState(""),
     [stateReady, setStateReady] = useState(false);
-  useEffect(()=>{const handler=(event)=>setGlobalNotice(event.detail);window.addEventListener("pharmasys:notice",handler);return()=>window.removeEventListener("pharmasys:notice",handler);},[]);
+  useEffect(() => {
+    const handler = (event) => setGlobalNotice(event.detail);
+    window.addEventListener("pharmasys:notice", handler);
+    return () => window.removeEventListener("pharmasys:notice", handler);
+  }, []);
   useEffect(() => {
     const applyState = (state) => {
       setBranches(state.branches || []);
@@ -3767,7 +3906,7 @@ export default function AppV2() {
         if (!stateResponse.ok)
           throw new Error("No se pudieron cargar los datos desde Supabase.");
         let state = await stateResponse.json();
-        if (state.empty && session.user.role === "ADMIN") {
+        if (state.empty && isAdminRole(session.user.role)) {
           const migrationPayload = {
             branches,
             inventories,
@@ -3811,7 +3950,7 @@ export default function AppV2() {
     load();
   }, []);
   useEffect(() => {
-    if (!stateReady || currentUser?.role !== "ADMIN") return undefined;
+    if (!stateReady || !isAdminRole(currentUser?.role)) return undefined;
     const timer = window.setTimeout(async () => {
       const response = await fetch("/api/v1/state/", {
         method: "PUT",
@@ -3898,7 +4037,7 @@ export default function AppV2() {
               .filter(
                 (b) =>
                   b.active !== false &&
-                  (currentUser.role === "ADMIN" ||
+                  (isAdminRole(currentUser.role) ||
                     currentUser.branchIds?.includes(b.id)),
               )
               .map((b) => (
@@ -3925,11 +4064,7 @@ export default function AppV2() {
             />
             <span>
               <b>{currentUser.name}</b>
-              <small>
-                {currentUser.role === "ADMIN"
-                  ? "Administrador"
-                  : "Encargado de inventario"}
-              </small>
+              <small>{roleLabel(currentUser.role)}</small>
             </span>
             <ChevronDown />
           </button>
@@ -4030,7 +4165,12 @@ export default function AppV2() {
         />
       )}
       {toast && <SuccessToast message={toast} />}
-      {globalNotice&&<NoticeDialog message={globalNotice} onClose={()=>setGlobalNotice("")} />}
+      {globalNotice && (
+        <NoticeDialog
+          message={globalNotice}
+          onClose={() => setGlobalNotice("")}
+        />
+      )}
     </div>
   );
 }
