@@ -1,6 +1,8 @@
 from .base import *  # noqa: F403
 
 DEBUG = False
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 SECURE_SSL_REDIRECT = True
 SECURE_HSTS_SECONDS = 31536000

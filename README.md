@@ -80,6 +80,23 @@ Para despliegue manual sin Blueprint, use:
 - Start command: `gunicorn config.wsgi:application`
 - Variables obligatorias: `DJANGO_SETTINGS_MODULE=config.settings.production`, `DJANGO_SECRET_KEY`, `DATABASE_URL` y `TIME_ZONE=America/Guayaquil`.
 
+## Inicio de sesión con Google/Gmail
+
+1. En Google Cloud Console cree o seleccione un proyecto.
+2. En **Google Auth Platform** configure la pantalla de consentimiento, el nombre de la aplicación y los correos de soporte.
+3. En **Clients**, cree un cliente OAuth de tipo **Web application**.
+4. Añada como origen autorizado `https://SU-SERVICIO.onrender.com`.
+5. Añada exactamente esta URI de redirección autorizada, incluida la barra final:
+
+   ```text
+   https://SU-SERVICIO.onrender.com/accounts/google/login/callback/
+   ```
+
+6. En Render agregue `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` con los valores del cliente OAuth y vuelva a desplegar.
+7. Mientras la aplicación de Google esté en modo **Testing**, añada en **Audience > Test users** cada Gmail que deba iniciar sesión.
+
+Los usuarios creados por Google entran con acceso operativo. Para otorgar acceso administrativo, marque el usuario como `staff` desde `/admin/` o asígnele los permisos correspondientes. Nunca guarde el secreto OAuth en `.env.example` ni en GitHub.
+
 ## Verificación
 
 ```powershell

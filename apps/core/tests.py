@@ -21,6 +21,18 @@ class SmokeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
+    def test_session_api_reports_authentication(self):
+        self.assertFalse(self.client.get("/api/v1/auth/session/").json()["authenticated"])
+        self.client.force_login(self.user)
+        response = self.client.get("/api/v1/auth/session/")
+        self.assertTrue(response.json()["authenticated"])
+        self.assertEqual(response.json()["user"]["email"], self.user.email)
+
+    def test_logout_api_closes_session(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.post("/api/v1/auth/logout/").status_code, 200)
+        self.assertFalse(self.client.get("/api/v1/auth/session/").json()["authenticated"])
+
     def test_admin_redirects_anonymous_user(self):
         self.assertEqual(self.client.get("/admin/").status_code, 302)
 

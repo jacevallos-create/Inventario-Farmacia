@@ -664,7 +664,9 @@ function CredentialLogin({ onLogin }) {
           </div>
           <button
             className="google-button compact"
-            onClick={() => onLogin(defaultUsers[0])}
+            onClick={() =>
+              window.location.assign("/accounts/google/login/?process=login")
+            }
           >
             <img
               src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
@@ -2316,9 +2318,8 @@ function AdminReports({ branches, inventories, sales, onNotify }) {
 }
 
 export default function AppV2() {
-  const [currentUser, setCurrentUser] = useState(() =>
-      JSON.parse(localStorage.getItem("pharma-current-user") || "null"),
-    ),
+  const [currentUser, setCurrentUser] = useState(null),
+    [authChecking, setAuthChecking] = useState(true),
     [users, setUsers] = useState(
       () =>
         JSON.parse(localStorage.getItem("pharma-users") || "null") ||
@@ -2348,6 +2349,21 @@ export default function AppV2() {
     [toast, setToast] = useState(""),
     [globalQuery, setGlobalQuery] = useState("");
   const searchRef = useRef(null);
+  useEffect(() => {
+    fetch("/api/v1/auth/session/", { credentials: "same-origin" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.authenticated) {
+          setCurrentUser(data.user);
+          const firstBranch =
+            data.user.role === "ADMIN"
+              ? branches[0]?.id
+              : data.user.branchIds[0];
+          if (firstBranch) setBranchId(firstBranch);
+        }
+      })
+      .finally(() => setAuthChecking(false));
+  }, []);
   useEffect(
     () =>
       localStorage.setItem("pharma-inventories", JSON.stringify(inventories)),
@@ -2385,6 +2401,8 @@ export default function AppV2() {
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
   }, []);
+  if (authChecking)
+    return <main className="auth-loading">Verificando sesión segura…</main>;
   if (!currentUser)
     return (
       <CredentialLogin
@@ -2542,7 +2560,16 @@ export default function AppV2() {
           confirmLabel="Cerrar sesión"
           tone="danger"
           onClose={() => setLogoutDialog(false)}
-          onConfirm={() => {
+          onConfirm={async () => {
+            const csrfToken = document.cookie
+              .split("; ")
+              .find((row) => row.startsWith("csrftoken="))
+              ?.split("=")[1];
+            await fetch("/api/v1/auth/logout/", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "X-CSRFToken": csrfToken || "" },
+            });
             localStorage.removeItem("pharma-current-user");
             setLogoutDialog(false);
             setCurrentUser(null);

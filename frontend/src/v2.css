@@ -1454,6 +1454,14 @@ td small {
   box-shadow: 0 18px 50px #13213d2b;
   animation: toast-in 0.24s ease-out;
 }
+.auth-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #f5f7fb;
+  color: #4f46e5;
+  font: 700 14px Manrope;
+}
 .success-toast > span {
   display: grid;
   width: 38px;
