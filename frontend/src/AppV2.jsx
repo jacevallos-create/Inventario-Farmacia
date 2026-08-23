@@ -5,6 +5,7 @@ import {
   Bell,
   Building2,
   CheckCircle2,
+  ClipboardList,
   ChevronDown,
   Download,
   Edit3,
@@ -40,8 +41,8 @@ import {
 const money = (n) =>
   new Intl.NumberFormat("es-CO", {
     style: "currency",
-    currency: "COP",
-    maximumFractionDigits: 0,
+    currency: "USD",
+    minimumFractionDigits: 2,
   }).format(n || 0);
 const csrfToken = () =>
   document.cookie
@@ -274,6 +275,7 @@ const nav = [
   ["Punto de Venta (POS)", ShoppingCart],
   ["Sucursales", Building2],
   ["Proveedores", Truck],
+  ["Compras", ClipboardList],
   ["Usuarios y Accesos", Users],
   ["Reportes", BarChart3],
 ];
@@ -1519,6 +1521,28 @@ function BranchManager({
   );
 }
 
+function Purchases({ branch, items, suppliers }) {
+  const [purchases, setPurchases] = useState([]), [form, setForm] = useState(null), [busy, setBusy] = useState(false);
+  const load = async () => {
+    const response = await fetch("/api/v1/purchases/", { credentials: "same-origin" });
+    if (response.ok) setPurchases((await response.json()).purchases || []);
+  };
+  useEffect(() => { load(); }, []);
+  const create = async (event) => {
+    event.preventDefault(); setBusy(true);
+    try {
+      const response = await fetch("/api/v1/purchases/", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() }, body: JSON.stringify({ branchId: branch.id, supplierId: form.supplierId, notes: form.notes, items: [{ productId: form.productId, quantity: form.quantity, cost: form.cost }] }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.detail);
+      setPurchases([data, ...purchases]); setForm(null);
+    } catch (error) { alert(error.message); } finally { setBusy(false); }
+  };
+  return <>
+    <section className="page-heading"><div><p className="eyebrow">ABASTECIMIENTO</p><h1>Órdenes de compra</h1><p>Recepción controlada por lote y vencimiento en {branch.name}.</p></div><button className="button primary" disabled={!items.length || !suppliers.length} onClick={() => setForm({ supplierId: suppliers[0]?.id, productId: items[0]?.id, quantity: 1, cost: items[0]?.buyPrice || 0, notes: "" })}><Plus />Nueva orden</button></section>
+    <section className="table-card"><div className="table-scroll"><table><thead><tr><th>Orden</th><th>Proveedor</th><th>Fecha</th><th>Total</th><th>Estado</th></tr></thead><tbody>{purchases.map((purchase) => <tr key={purchase.id}><td><b>{purchase.number}</b><small>{purchase.user}</small></td><td>{purchase.supplier}</td><td>{new Date(purchase.date).toLocaleDateString("es-EC")}</td><td>{money(purchase.total)}</td><td><span className="status success">{purchase.status}</span></td></tr>)}</tbody></table></div></section>
+    {form && <SimpleModal title="Nueva orden de compra" onClose={() => setForm(null)}><form className="simple-form" onSubmit={create}><div className="form-grid"><label>Proveedor<select value={form.supplierId} onChange={(e) => setForm({...form, supplierId:e.target.value})}>{suppliers.map((x)=><option value={x.id} key={x.id}>{x.name}</option>)}</select></label><label>Medicamento<select value={form.productId} onChange={(e) => setForm({...form, productId:e.target.value})}>{items.map((x)=><option value={x.id} key={x.id}>{x.name}</option>)}</select></label><label>Cantidad<input required min="1" type="number" value={form.quantity} onChange={(e)=>setForm({...form,quantity:e.target.value})}/></label><label>Costo unitario<input required min="0" step="0.01" type="number" value={form.cost} onChange={(e)=>setForm({...form,cost:e.target.value})}/></label><label className="wide">Observación<input value={form.notes} onChange={(e)=>setForm({...form,notes:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Guardando…":"Crear orden"}</button></footer></form></SimpleModal>}
+  </>;
+}
+
 function Suppliers({ suppliers, setSuppliers }) {
   const [form, setForm] = useState(null),
     [query, setQuery] = useState("");
@@ -2699,6 +2723,8 @@ export default function AppV2() {
             />
           ) : active === "Proveedores" ? (
             <Suppliers suppliers={suppliers} setSuppliers={setSuppliers} />
+          ) : active === "Compras" ? (
+            <Purchases branch={branch} items={items} suppliers={suppliers} />
           ) : active === "Punto de Venta (POS)" ? (
             <Sales
               items={items}

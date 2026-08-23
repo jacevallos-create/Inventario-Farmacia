@@ -28,3 +28,30 @@ class VentaLote(TimeStampedModel):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["venta", "lote"], name="uq_venta_lote")]
+
+
+class DevolucionVenta(TimeStampedModel):
+    venta = models.ForeignKey(Venta, on_delete=models.PROTECT, related_name="devoluciones")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    cantidad = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    motivo = models.CharField(max_length=255)
+    autorizada_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="devoluciones_autorizadas")
+    total_devuelto = models.DecimalField(max_digits=14, decimal_places=2)
+
+
+class ComprobanteElectronico(TimeStampedModel):
+    class Estado(models.TextChoices):
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        FIRMADO = "FIRMADO", "Firmado"
+        AUTORIZADO = "AUTORIZADO", "Autorizado"
+        DEVUELTO = "DEVUELTO", "Devuelto"
+        ANULADO = "ANULADO", "Anulado"
+    venta = models.OneToOneField(Venta, on_delete=models.PROTECT, related_name="comprobante")
+    clave_acceso = models.CharField(max_length=49, unique=True)
+    secuencial = models.CharField(max_length=9)
+    estado = models.CharField(max_length=12, choices=Estado.choices, default=Estado.PENDIENTE)
+    xml_generado = models.TextField(blank=True)
+    xml_autorizado = models.TextField(blank=True)
+    numero_autorizacion = models.CharField(max_length=64, blank=True)
+    autorizado_en = models.DateTimeField(null=True, blank=True)
+    mensajes_sri = models.JSONField(default=list, blank=True)

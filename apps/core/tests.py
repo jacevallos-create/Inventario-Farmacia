@@ -5,6 +5,8 @@ from apps.farmacias.models import Farmacia, UsuarioFarmacia
 from apps.auditoria.models import AuditLog
 from apps.lotes.models import Lote
 from apps.ventas.models import VentaLote
+from apps.inventario.models import InventarioFarmacia, MovimientoInventario
+from apps.proveedores.models import Proveedor
 
 
 class SmokeTests(TestCase):
@@ -103,6 +105,32 @@ class SmokeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         self.assertTrue(response.content.startswith(b"PK"))
+
+    def test_purchase_receipt_creates_lot_and_inventory_atomically(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.client.force_login(self.user)
+        state = self.client.put("/api/v1/state/", {
+            "branches": [{"id": "central", "name": "Central", "active": True}],
+            "inventories": {"central": [{"name": "Ibuprofeno", "sku": "COMPRA-1", "category": "Otros", "lab": "Test", "stock": 0, "min": 2, "buyPrice": 1, "sellPrice": 2}]},
+            "suppliers": [{"id": 1, "name": "Distribuidora", "taxId": "1799999999001", "active": True}],
+            "sales": [], "users": [],
+        }, content_type="application/json").json()
+        medicine_id = state["inventories"]["central"][0]["id"]
+        supplier_id = Proveedor.objects.get(ruc="1799999999001").id
+        purchase = self.client.post("/api/v1/purchases/", {
+            "branchId": "central", "supplierId": supplier_id,
+            "items": [{"productId": medicine_id, "quantity": 10, "cost": "1.25"}],
+        }, content_type="application/json")
+        self.assertEqual(purchase.status_code, 201, purchase.json())
+        detail_id = purchase.json()["items"][0]["id"]
+        receipt = self.client.post(f"/api/v1/purchases/{purchase.json()['id']}/receive/", {
+            "items": [{"detailId": detail_id, "quantity": 10, "lot": "LOT-EC-1", "expires": "2030-12-31"}],
+        }, content_type="application/json")
+        self.assertEqual(receipt.status_code, 200, receipt.json())
+        self.assertEqual(receipt.json()["status"], "RECIBIDA")
+        self.assertEqual(InventarioFarmacia.objects.get(farmacia__codigo="central", medicamento_id=medicine_id).stock_actual, 10)
+        self.assertTrue(MovimientoInventario.objects.filter(concepto="COMPRA", lote__numero="LOT-EC-1").exists())
 
     def test_admin_redirects_anonymous_user(self):
         self.assertEqual(self.client.get("/admin/").status_code, 302)
