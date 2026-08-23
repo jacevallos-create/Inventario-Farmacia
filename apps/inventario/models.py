@@ -11,6 +11,7 @@ class InventarioFarmacia(TimeStampedModel):
     stock_minimo = models.PositiveIntegerField(default=0)
     stock_maximo = models.PositiveIntegerField(null=True, blank=True)
     ubicacion = models.CharField(max_length=100, blank=True)
+    precio_compra = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     precio_venta = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     class Meta:
         constraints = [models.UniqueConstraint(fields=["farmacia", "medicamento"], name="uq_inventario_farmacia_medicamento")]
@@ -45,4 +46,3 @@ class HistorialPrecio(TimeStampedModel):
     precio_nuevo = models.DecimalField(max_digits=12, decimal_places=2)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     motivo = models.CharField(max_length=255)
-

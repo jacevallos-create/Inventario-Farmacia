@@ -49,6 +49,24 @@ class SmokeTests(TestCase):
         self.assertIsNone(app_settings.USER_MODEL_USERNAME_FIELD)
         self.assertEqual(app_settings.USERNAME_VALIDATORS, [])
 
+    def test_admin_can_persist_and_read_system_state(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.client.force_login(self.user)
+        payload = {
+            "branches": [{"id": "central", "name": "Farmacia Central", "address": "Centro", "active": True}],
+            "inventories": {"central": [{
+                "id": 1, "name": "Paracetamol 500 mg", "sku": "MED-API-1", "barcode": "",
+                "category": "Analgésicos", "lab": "Laboratorio Test", "presentation": "Tabletas",
+                "stock": 25, "min": 5, "sellPrice": 3.5,
+            }]},
+            "suppliers": [], "sales": [], "users": [],
+        }
+        response = self.client.put("/api/v1/state/", payload, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["inventories"]["central"][0]["stock"], 25)
+        self.assertEqual(self.client.get("/api/v1/state/").status_code, 200)
+
     def test_admin_redirects_anonymous_user(self):
         self.assertEqual(self.client.get("/admin/").status_code, 302)
 

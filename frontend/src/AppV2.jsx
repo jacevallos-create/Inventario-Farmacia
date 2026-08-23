@@ -43,6 +43,11 @@ const money = (n) =>
     currency: "COP",
     maximumFractionDigits: 0,
   }).format(n || 0);
+const csrfToken = () =>
+  document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("csrftoken="))
+    ?.split("=")[1] || "";
 const defaultBranches = [
   { id: "central", name: "Farmacia Central", address: "Av. Central 123" },
   { id: "norte", name: "Sucursal Norte", address: "Calle 80 #24-16" },
@@ -2402,43 +2407,95 @@ export default function AppV2() {
     [sidebar, setSidebar] = useState(false),
     [modal, setModal] = useState(false),
     [logoutDialog, setLogoutDialog] = useState(false),
-    [toast, setToast] = useState("");
+    [toast, setToast] = useState(""),
+    [stateReady, setStateReady] = useState(false);
   useEffect(() => {
-    fetch("/api/v1/auth/session/", { credentials: "same-origin" })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.authenticated) {
-          setCurrentUser(data.user);
-          const firstBranch =
-            data.user.role === "ADMIN"
-              ? branches[0]?.id
-              : data.user.branchIds[0];
-          if (firstBranch) setBranchId(firstBranch);
+    const applyState = (state) => {
+      setBranches(state.branches || []);
+      setInventories(state.inventories || {});
+      setSuppliers(state.suppliers || []);
+      setSales(state.sales || []);
+      if (state.users?.length) setUsers(state.users);
+      const validBranch = state.branches?.some(
+        (branch) => branch.id === branchId,
+      )
+        ? branchId
+        : state.branches?.[0]?.id;
+      if (validBranch) setBranchId(validBranch);
+    };
+    const load = async () => {
+      try {
+        const sessionResponse = await fetch("/api/v1/auth/session/", {
+          credentials: "same-origin",
+        });
+        const session = await sessionResponse.json();
+        if (!session.authenticated) return;
+        setCurrentUser(session.user);
+        const stateResponse = await fetch("/api/v1/state/", {
+          credentials: "same-origin",
+        });
+        let state = await stateResponse.json();
+        if (state.empty && session.user.role === "ADMIN") {
+          const migrationPayload = {
+            branches,
+            inventories,
+            suppliers,
+            sales,
+            users: state.users || [],
+          };
+          const migrationResponse = await fetch("/api/v1/state/", {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": csrfToken(),
+            },
+            body: JSON.stringify(migrationPayload),
+          });
+          if (!migrationResponse.ok)
+            throw new Error("No se pudo migrar la información local.");
+          state = await migrationResponse.json();
         }
-      })
-      .finally(() => setAuthChecking(false));
+        applyState(state);
+        [
+          "pharma-inventories",
+          "pharma-branches",
+          "pharma-suppliers",
+          "pharma-sales",
+          "pharma-users",
+        ].forEach((key) => localStorage.removeItem(key));
+        setStateReady(true);
+      } catch (error) {
+        setToast(error.message || "No fue posible cargar Supabase.");
+      } finally {
+        setAuthChecking(false);
+      }
+    };
+    load();
   }, []);
-  useEffect(
-    () =>
-      localStorage.setItem("pharma-inventories", JSON.stringify(inventories)),
-    [inventories],
-  );
-  useEffect(
-    () => localStorage.setItem("pharma-branches", JSON.stringify(branches)),
-    [branches],
-  );
-  useEffect(
-    () => localStorage.setItem("pharma-suppliers", JSON.stringify(suppliers)),
-    [suppliers],
-  );
-  useEffect(
-    () => localStorage.setItem("pharma-sales", JSON.stringify(sales)),
-    [sales],
-  );
-  useEffect(
-    () => localStorage.setItem("pharma-users", JSON.stringify(users)),
-    [users],
-  );
+  useEffect(() => {
+    if (!stateReady || currentUser?.role !== "ADMIN") return undefined;
+    const timer = window.setTimeout(async () => {
+      const response = await fetch("/api/v1/state/", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken(),
+        },
+        body: JSON.stringify({
+          branches,
+          inventories,
+          suppliers,
+          sales,
+          users,
+        }),
+      });
+      if (!response.ok)
+        setToast("No se pudieron guardar los cambios en Supabase.");
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [stateReady, currentUser, branches, inventories, suppliers, sales, users]);
   useEffect(() => localStorage.setItem("pharma-branch", branchId), [branchId]);
   useEffect(() => {
     if (!toast) return undefined;
@@ -2448,17 +2505,7 @@ export default function AppV2() {
   if (authChecking)
     return <main className="auth-loading">Verificando sesión segura…</main>;
   if (!currentUser)
-    return (
-      <CredentialLogin
-        onLogin={(user) => {
-          const firstBranch =
-            user.role === "ADMIN" ? branches[0]?.id : user.branchIds[0];
-          setBranchId(firstBranch);
-          localStorage.setItem("pharma-current-user", JSON.stringify(user));
-          setCurrentUser(user);
-        }}
-      />
-    );
+    return <CredentialLogin onLogin={() => window.location.reload()} />;
   const items = inventories[branchId] || [],
     setItems = (next) => setInventories({ ...inventories, [branchId]: next }),
     branch = branches.find((b) => b.id === branchId);
