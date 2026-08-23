@@ -1151,7 +1151,7 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
   );
 }
 
-function Dashboard({ items, branch, onInventory }) {
+function Dashboard({ items, branch, onInventory, user }) {
   const critical = items.filter((p) => p.stock <= p.min),
     value = items.reduce((s, p) => s + p.stock * p.buyPrice, 0);
   return (
@@ -1159,7 +1159,7 @@ function Dashboard({ items, branch, onInventory }) {
       <section className="page-heading">
         <div>
           <p className="eyebrow">{branch.name.toUpperCase()}</p>
-          <h1>Buenos días, Alex</h1>
+          <h1>Buenos días, {user?.name || "Usuario"}</h1>
           <p>Este es el estado general de tu inventario hoy.</p>
         </div>
         <button className="button secondary" onClick={onInventory}>
@@ -2484,6 +2484,7 @@ export default function AppV2() {
             <Dashboard
               items={items}
               branch={branch}
+              user={currentUser}
               onInventory={() => setActive("Inventario")}
             />
           ) : active === "Inventario" ? (
