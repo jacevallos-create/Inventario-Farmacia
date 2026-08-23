@@ -1,124 +1,2555 @@
-import {useMemo,useState,useEffect,useRef} from 'react'
-import {AlertTriangle,BarChart3,Bell,Building2,ChevronDown,Edit3,Eye,EyeOff,FlaskConical,LayoutDashboard,Menu,Package,Plus,RefreshCw,ScanLine,Search,ShoppingCart,Trash2,Truck,Users,X} from 'lucide-react'
-import {Area,AreaChart,CartesianGrid,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts'
+import { useMemo, useState, useEffect, useRef } from "react";
+import {
+  AlertTriangle,
+  BarChart3,
+  Bell,
+  Building2,
+  CheckCircle2,
+  ChevronDown,
+  Download,
+  Edit3,
+  Eye,
+  EyeOff,
+  FileSpreadsheet,
+  FlaskConical,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Package,
+  Plus,
+  RefreshCw,
+  ScanLine,
+  Search,
+  ShieldCheck,
+  ShoppingCart,
+  Trash2,
+  Truck,
+  Users,
+  X,
+} from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-const money=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0)
-const defaultBranches=[
- {id:'central',name:'Farmacia Central',address:'Av. Central 123'},
- {id:'norte',name:'Sucursal Norte',address:'Calle 80 #24-16'},
- {id:'sur',name:'Sucursal Sur',address:'Carrera 45 #12-08'},
-]
-const defaultSuppliers=[
- {id:1,name:'Distribuciones Genfar',taxId:'900123456-1',contact:'Carlos Ruiz',phone:'310 222 1045',email:'ventas@genfar.com',city:'Bogotá',active:true},
- {id:2,name:'Tecnoquímicas S.A.',taxId:'890900010-2',contact:'Laura Gómez',phone:'300 555 0188',email:'pedidos@tq.com.co',city:'Cali',active:true},
- {id:3,name:'Sanofi Colombia',taxId:'860020570-1',contact:'Diana Pérez',phone:'315 480 2271',email:'distribucion@sanofi.com',city:'Bogotá',active:true},
-]
-const defaultUsers=[
- {id:1,name:'Administrador PharmaSys',email:'admin@pharmasys.com',password:'Admin2026!',role:'ADMIN',branchIds:['central','norte','sur'],active:true},
- {id:2,name:'Encargado Central',email:'inventario.central@pharmasys.com',password:'Inventario2026!',role:'INVENTARIO',branchIds:['central'],active:true},
-]
-const labs=['Bayer','Pfizer','Genfar','Roche','Sanofi','Tecnoquímicas','MK']
-const presentations=['Tabletas','Cajas','Jarabe','Blíster','Ampollas','Crema','Cápsulas']
-const categories=['Analgésicos y antipiréticos','Antibióticos','Antiinflamatorios','Antialérgicos','Cardiovasculares','Gastrointestinales','Respiratorios','Antidiabéticos','Dermatológicos','Vitaminas y suplementos','Sistema nervioso','Salud sexual y reproductiva','Oftálmicos','Pediátricos','Primeros auxilios','Dispositivos médicos','Cuidado personal','Otros']
-const starter={
- central:[
-  {id:1,name:'Acetaminofén 500 mg',barcode:'7702057001012',sku:'MED-001',lab:'Genfar',presentation:'Tabletas',buyPrice:4200,sellPrice:5460,margin:30,min:15,stock:84},
-  {id:2,name:'Amoxicilina 500 mg',barcode:'7702057001142',sku:'MED-014',lab:'Pfizer',presentation:'Cápsulas',buyPrice:12800,sellPrice:16640,margin:30,min:12,stock:8},
-  {id:3,name:'Insulina glargina',barcode:'7702057001234',sku:'MED-023',lab:'Sanofi',presentation:'Ampollas',buyPrice:53000,sellPrice:68900,margin:30,min:8,stock:0},
-  {id:4,name:'Loratadina 10 mg',barcode:'7702057001102',sku:'MED-102',lab:'MK',presentation:'Tabletas',buyPrice:4800,sellPrice:6240,margin:30,min:15,stock:68},
-  {id:5,name:'Omeprazol 20 mg',barcode:'7702057001028',sku:'MED-028',lab:'Genfar',presentation:'Cápsulas',buyPrice:9500,sellPrice:12350,margin:30,min:10,stock:19},
- ],
- norte:[{id:6,name:'Ibuprofeno 400 mg',barcode:'7702057001041',sku:'MED-041',lab:'Bayer',presentation:'Tabletas',buyPrice:6000,sellPrice:7800,margin:30,min:12,stock:26}],
- sur:[],
+const money = (n) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(n || 0);
+const defaultBranches = [
+  { id: "central", name: "Farmacia Central", address: "Av. Central 123" },
+  { id: "norte", name: "Sucursal Norte", address: "Calle 80 #24-16" },
+  { id: "sur", name: "Sucursal Sur", address: "Carrera 45 #12-08" },
+];
+const defaultSuppliers = [
+  {
+    id: 1,
+    name: "Distribuciones Genfar",
+    taxId: "900123456-1",
+    contact: "Carlos Ruiz",
+    phone: "310 222 1045",
+    email: "ventas@genfar.com",
+    city: "Bogotá",
+    active: true,
+  },
+  {
+    id: 2,
+    name: "Tecnoquímicas S.A.",
+    taxId: "890900010-2",
+    contact: "Laura Gómez",
+    phone: "300 555 0188",
+    email: "pedidos@tq.com.co",
+    city: "Cali",
+    active: true,
+  },
+  {
+    id: 3,
+    name: "Sanofi Colombia",
+    taxId: "860020570-1",
+    contact: "Diana Pérez",
+    phone: "315 480 2271",
+    email: "distribucion@sanofi.com",
+    city: "Bogotá",
+    active: true,
+  },
+];
+const defaultUsers = [
+  {
+    id: 1,
+    name: "Administrador PharmaSys",
+    email: "admin@pharmasys.com",
+    password: "Admin2026!",
+    role: "ADMIN",
+    branchIds: ["central", "norte", "sur"],
+    active: true,
+  },
+  {
+    id: 2,
+    name: "Encargado Central",
+    email: "inventario.central@pharmasys.com",
+    password: "Inventario2026!",
+    role: "INVENTARIO",
+    branchIds: ["central"],
+    active: true,
+  },
+];
+const labs = [
+  "Bayer",
+  "Pfizer",
+  "Genfar",
+  "Roche",
+  "Sanofi",
+  "Tecnoquímicas",
+  "MK",
+];
+const presentations = [
+  "Tabletas",
+  "Cajas",
+  "Jarabe",
+  "Blíster",
+  "Ampollas",
+  "Crema",
+  "Cápsulas",
+];
+const categories = [
+  "Analgésicos y antipiréticos",
+  "Antibióticos",
+  "Antiinflamatorios",
+  "Antialérgicos",
+  "Cardiovasculares",
+  "Gastrointestinales",
+  "Respiratorios",
+  "Antidiabéticos",
+  "Dermatológicos",
+  "Vitaminas y suplementos",
+  "Sistema nervioso",
+  "Salud sexual y reproductiva",
+  "Oftálmicos",
+  "Pediátricos",
+  "Primeros auxilios",
+  "Dispositivos médicos",
+  "Cuidado personal",
+  "Otros",
+];
+const starter = {
+  central: [
+    {
+      id: 1,
+      name: "Acetaminofén 500 mg",
+      barcode: "7702057001012",
+      sku: "MED-001",
+      lab: "Genfar",
+      presentation: "Tabletas",
+      buyPrice: 4200,
+      sellPrice: 5460,
+      margin: 30,
+      min: 15,
+      stock: 84,
+    },
+    {
+      id: 2,
+      name: "Amoxicilina 500 mg",
+      barcode: "7702057001142",
+      sku: "MED-014",
+      lab: "Pfizer",
+      presentation: "Cápsulas",
+      buyPrice: 12800,
+      sellPrice: 16640,
+      margin: 30,
+      min: 12,
+      stock: 8,
+    },
+    {
+      id: 3,
+      name: "Insulina glargina",
+      barcode: "7702057001234",
+      sku: "MED-023",
+      lab: "Sanofi",
+      presentation: "Ampollas",
+      buyPrice: 53000,
+      sellPrice: 68900,
+      margin: 30,
+      min: 8,
+      stock: 0,
+    },
+    {
+      id: 4,
+      name: "Loratadina 10 mg",
+      barcode: "7702057001102",
+      sku: "MED-102",
+      lab: "MK",
+      presentation: "Tabletas",
+      buyPrice: 4800,
+      sellPrice: 6240,
+      margin: 30,
+      min: 15,
+      stock: 68,
+    },
+    {
+      id: 5,
+      name: "Omeprazol 20 mg",
+      barcode: "7702057001028",
+      sku: "MED-028",
+      lab: "Genfar",
+      presentation: "Cápsulas",
+      buyPrice: 9500,
+      sellPrice: 12350,
+      margin: 30,
+      min: 10,
+      stock: 19,
+    },
+  ],
+  norte: [
+    {
+      id: 6,
+      name: "Ibuprofeno 400 mg",
+      barcode: "7702057001041",
+      sku: "MED-041",
+      lab: "Bayer",
+      presentation: "Tabletas",
+      buyPrice: 6000,
+      sellPrice: 7800,
+      margin: 30,
+      min: 12,
+      stock: 26,
+    },
+  ],
+  sur: [],
+};
+const loadInventories = () => {
+  const saved = JSON.parse(
+    localStorage.getItem("pharma-inventories") || "null",
+  );
+  if (!saved) return starter;
+  return Object.fromEntries(
+    Object.entries(saved).map(([branch, items]) => [
+      branch,
+      items.map((p) => ({
+        ...p,
+        category: p.category || "Otros",
+        lab: p.lab || p.supplier || "Genfar",
+        presentation: p.presentation || "Tabletas",
+        buyPrice: Number(p.buyPrice ?? p.price ?? 0),
+        margin: Number(p.margin ?? 30),
+        sellPrice: Number(
+          p.sellPrice ?? Math.round(Number(p.price || 0) * 1.3),
+        ),
+        min: Number(p.min || 0),
+        stock: Number(p.stock || 0),
+      })),
+    ]),
+  );
+};
+const nav = [
+  ["Dashboard", LayoutDashboard],
+  ["Inventario", Package],
+  ["Punto de Venta (POS)", ShoppingCart],
+  ["Sucursales", Building2],
+  ["Proveedores", Truck],
+  ["Usuarios y Accesos", Users],
+  ["Reportes", BarChart3],
+];
+const trend = [
+  { m: "Mar", v: 980 },
+  { m: "Abr", v: 1120 },
+  { m: "May", v: 1060 },
+  { m: "Jun", v: 1280 },
+  { m: "Jul", v: 1210 },
+  { m: "Ago", v: 1390 },
+];
+const getStatus = (p) =>
+  p.stock === 0
+    ? ["Agotado", "danger"]
+    : p.stock <= p.min
+      ? ["Stock Crítico", "warning"]
+      : ["En Stock", "success"];
+
+const exportExcel = async ({ filename, sheetName, columns, rows }) => {
+  const { default: ExcelJS } = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "PharmaSys";
+  workbook.created = new Date();
+  const sheet = workbook.addWorksheet(sheetName, {
+    views: [{ state: "frozen", ySplit: 1 }],
+  });
+  sheet.columns = columns.map((column) => ({
+    header: column.header,
+    key: column.key,
+    width: column.width || 20,
+  }));
+  rows.forEach((row) => sheet.addRow(row));
+  const header = sheet.getRow(1);
+  header.height = 24;
+  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  header.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF4F46E5" },
+  };
+  header.alignment = { vertical: "middle" };
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: columns.length },
+  };
+  sheet.eachRow((row, index) => {
+    if (index > 1 && index % 2 === 0)
+      row.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFF5F7FB" },
+      };
+  });
+  const buffer = await workbook.xlsx.writeBuffer(),
+    url = URL.createObjectURL(
+      new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+    ),
+    link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+function ConfirmDialog({
+  icon: Icon = ShieldCheck,
+  eyebrow = "CONFIRMACIÓN",
+  title,
+  message,
+  confirmLabel = "Confirmar",
+  tone = "primary",
+  busy = false,
+  onConfirm,
+  onClose,
+}) {
+  return (
+    <div
+      className="modal-backdrop confirm-backdrop"
+      role="presentation"
+      onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}
+    >
+      <section
+        className="confirm-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+      >
+        <button
+          className="confirm-close"
+          onClick={onClose}
+          disabled={busy}
+          aria-label="Cerrar"
+        >
+          <X />
+        </button>
+        <span className={`confirm-icon ${tone}`}>
+          <Icon />
+        </span>
+        <p className="eyebrow">{eyebrow}</p>
+        <h2 id="confirm-title">{title}</h2>
+        <p className="confirm-message">{message}</p>
+        <div className="confirm-actions">
+          <button
+            className="button secondary"
+            onClick={onClose}
+            disabled={busy}
+          >
+            Cancelar
+          </button>
+          <button
+            className={`button ${tone === "danger" ? "danger" : "primary"}`}
+            onClick={onConfirm}
+            disabled={busy}
+          >
+            {busy ? "Preparando…" : confirmLabel}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
-const loadInventories=()=>{const saved=JSON.parse(localStorage.getItem('pharma-inventories')||'null');if(!saved)return starter;return Object.fromEntries(Object.entries(saved).map(([branch,items])=>[branch,items.map(p=>({...p,category:p.category||'Otros',lab:p.lab||p.supplier||'Genfar',presentation:p.presentation||'Tabletas',buyPrice:Number(p.buyPrice??p.price??0),margin:Number(p.margin??30),sellPrice:Number(p.sellPrice??Math.round(Number(p.price||0)*1.3)),min:Number(p.min||0),stock:Number(p.stock||0)}))]))}
-const nav=[['Dashboard',LayoutDashboard],['Inventario',Package],['Punto de Venta (POS)',ShoppingCart],['Sucursales',Building2],['Proveedores',Truck],['Usuarios y Accesos',Users],['Reportes',BarChart3]]
-const trend=[{m:'Mar',v:980},{m:'Abr',v:1120},{m:'May',v:1060},{m:'Jun',v:1280},{m:'Jul',v:1210},{m:'Ago',v:1390}]
-const getStatus=p=>p.stock===0?['Agotado','danger']:p.stock<=p.min?['Stock Crítico','warning']:['En Stock','success']
 
-function Login({onLogin}){
- return <main className="login-shell"><section className="login-brand"><div className="brand"><span><FlaskConical size={23}/></span>PharmaSys</div><div><p className="eyebrow light">INVENTARIO MULTI-SUCURSAL</p><h1>Medicamentos disponibles.<br/>Decisiones más seguras.</h1><p>Controla existencias, precios y alertas de todas tus farmacias desde un solo lugar.</p><div className="login-stats"><div><b>3</b><small>Sucursales</small></div><div><b>24/7</b><small>Monitoreo</small></div><div><b>100%</b><small>Trazabilidad</small></div></div></div><small>Gestión farmacéutica segura y centralizada</small></section><section className="login-panel"><div className="login-card"><div className="brand mobile"><span><FlaskConical size={21}/></span>PharmaSys</div><p className="eyebrow">BIENVENIDO</p><h2>Inicia sesión en tu cuenta</h2><p>Usa tu cuenta corporativa de Google para acceder al sistema.</p><button className="google-button" onClick={onLogin}><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt=""/>Continuar con Google</button><div className="security-note">Acceso protegido mediante Google OAuth 2.0</div><p className="legal">Al continuar, aceptas nuestros <a>Términos de servicio</a> y la <a>Política de privacidad</a>.</p></div></section></main>
+function SuccessToast({ message }) {
+  return (
+    <div className="success-toast" role="status">
+      <span>
+        <CheckCircle2 />
+      </span>
+      <div>
+        <b>Operación completada</b>
+        <small>{message}</small>
+      </div>
+    </div>
+  );
 }
 
-function PharmaLogin({onLogin,branches}){
- const [branchId,setBranchId]=useState(branches[0]?.id||'central')
- return <main className="login-shell"><section className="login-brand"><div className="brand"><span><FlaskConical size={23}/></span>PharmaSys</div><div><p className="eyebrow light">GESTIÓN FARMACÉUTICA MULTI-SUCURSAL</p><h1>Una operación clara.<br/>Todas tus farmacias.</h1><p>Inventario, ventas, proveedores y reportes en un solo espacio de trabajo seguro.</p><div className="login-stats"><div><b>{branches.length}</b><small>Sucursales</small></div><div><b>24/7</b><small>Monitoreo</small></div><div><b>100%</b><small>Trazabilidad</small></div></div></div><small>PharmaSys · Gestión segura y centralizada</small></section><section className="login-panel"><div className="login-card"><div className="brand mobile"><span><FlaskConical size={21}/></span>PharmaSys</div><p className="eyebrow">BIENVENIDO</p><h2>Accede a PharmaSys</h2><p>Selecciona tu sucursal inicial y continúa con tu cuenta corporativa.</p><label className="login-branch">Sucursal<select value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.filter(b=>b.active!==false).map(b=><option value={b.id} key={b.id}>{b.name}</option>)}</select></label><button className="google-button" onClick={()=>onLogin(branchId)}><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt=""/>Continuar con Google</button><div className="security-note">Acceso protegido mediante Google OAuth 2.0</div><p className="legal">Al continuar, aceptas nuestros <a>Términos de servicio</a> y la <a>Política de privacidad</a>.</p></div></section></main>
+function Login({ onLogin }) {
+  return (
+    <main className="login-shell">
+      <section className="login-brand">
+        <div className="brand">
+          <span>
+            <FlaskConical size={23} />
+          </span>
+          PharmaSys
+        </div>
+        <div>
+          <p className="eyebrow light">INVENTARIO MULTI-SUCURSAL</p>
+          <h1>
+            Medicamentos disponibles.
+            <br />
+            Decisiones más seguras.
+          </h1>
+          <p>
+            Controla existencias, precios y alertas de todas tus farmacias desde
+            un solo lugar.
+          </p>
+          <div className="login-stats">
+            <div>
+              <b>3</b>
+              <small>Sucursales</small>
+            </div>
+            <div>
+              <b>24/7</b>
+              <small>Monitoreo</small>
+            </div>
+            <div>
+              <b>100%</b>
+              <small>Trazabilidad</small>
+            </div>
+          </div>
+        </div>
+        <small>Gestión farmacéutica segura y centralizada</small>
+      </section>
+      <section className="login-panel">
+        <div className="login-card">
+          <div className="brand mobile">
+            <span>
+              <FlaskConical size={21} />
+            </span>
+            PharmaSys
+          </div>
+          <p className="eyebrow">BIENVENIDO</p>
+          <h2>Inicia sesión en tu cuenta</h2>
+          <p>Usa tu cuenta corporativa de Google para acceder al sistema.</p>
+          <button className="google-button" onClick={onLogin}>
+            <img
+              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+              alt=""
+            />
+            Continuar con Google
+          </button>
+          <div className="security-note">
+            Acceso protegido mediante Google OAuth 2.0
+          </div>
+          <p className="legal">
+            Al continuar, aceptas nuestros <a>Términos de servicio</a> y la{" "}
+            <a>Política de privacidad</a>.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
 }
 
-function CredentialLogin({onLogin}){
- const [email,setEmail]=useState('admin@pharmasys.com'),[password,setPassword]=useState('Admin2026!'),[show,setShow]=useState(false),[error,setError]=useState(''),[loading,setLoading]=useState(false)
- const submit=e=>{e.preventDefault();setLoading(true);setError('');setTimeout(()=>{const users=JSON.parse(localStorage.getItem('pharma-users')||'null')||defaultUsers,user=users.find(u=>u.active&&u.email.toLowerCase()===email.trim().toLowerCase()&&u.password===password);setLoading(false);if(user)onLogin(user);else setError('Correo o contraseña incorrectos, o usuario inactivo.')},350)}
- return <main className="login-shell"><section className="login-brand"><div className="brand"><span><FlaskConical size={23}/></span>PharmaSys</div><div><p className="eyebrow light">GESTIÓN FARMACÉUTICA MULTI-SUCURSAL</p><h1>Control por sede.<br/>Acceso por responsabilidades.</h1><p>Administra inventarios, colaboradores y reportes con permisos específicos para cada farmacia.</p><div className="login-stats"><div><b>Seguro</b><small>Roles y permisos</small></div><div><b>24/7</b><small>Monitoreo</small></div><div><b>100%</b><small>Trazabilidad</small></div></div></div><small>PharmaSys · Gestión segura y centralizada</small></section><section className="login-panel"><div className="login-card"><div className="brand mobile"><span><FlaskConical size={21}/></span>PharmaSys</div><p className="eyebrow">ACCESO SEGURO</p><h2>Inicia sesión</h2><p>Ingresa con las credenciales asignadas por el administrador.</p>{error&&<div className="login-error">{error}</div>}<form className="credential-form" onSubmit={submit}><label>Correo electrónico<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required/></label><label>Contraseña<div className="password-field"><input type={show?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/><button type="button" onClick={()=>setShow(!show)}>{show?<EyeOff/>:<Eye/>}</button></div></label><div className="login-options"><label><input type="checkbox"/> Recordarme</label><button type="button">¿Olvidaste tu contraseña?</button></div><button className="button primary login-submit" disabled={loading}>{loading?'Validando…':'Iniciar sesión'}</button></form><div className="login-divider"><span>O continúa con</span></div><button className="google-button compact" onClick={()=>onLogin(defaultUsers[0])}><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt=""/>Continuar con Google</button><p className="demo-access">Admin: admin@pharmasys.com · Admin2026!</p><p className="legal">Al continuar, aceptas los <a>Términos</a> y la <a>Política de privacidad</a>.</p></div></section></main>
+function PharmaLogin({ onLogin, branches }) {
+  const [branchId, setBranchId] = useState(branches[0]?.id || "central");
+  return (
+    <main className="login-shell">
+      <section className="login-brand">
+        <div className="brand">
+          <span>
+            <FlaskConical size={23} />
+          </span>
+          PharmaSys
+        </div>
+        <div>
+          <p className="eyebrow light">GESTIÓN FARMACÉUTICA MULTI-SUCURSAL</p>
+          <h1>
+            Una operación clara.
+            <br />
+            Todas tus farmacias.
+          </h1>
+          <p>
+            Inventario, ventas, proveedores y reportes en un solo espacio de
+            trabajo seguro.
+          </p>
+          <div className="login-stats">
+            <div>
+              <b>{branches.length}</b>
+              <small>Sucursales</small>
+            </div>
+            <div>
+              <b>24/7</b>
+              <small>Monitoreo</small>
+            </div>
+            <div>
+              <b>100%</b>
+              <small>Trazabilidad</small>
+            </div>
+          </div>
+        </div>
+        <small>PharmaSys · Gestión segura y centralizada</small>
+      </section>
+      <section className="login-panel">
+        <div className="login-card">
+          <div className="brand mobile">
+            <span>
+              <FlaskConical size={21} />
+            </span>
+            PharmaSys
+          </div>
+          <p className="eyebrow">BIENVENIDO</p>
+          <h2>Accede a PharmaSys</h2>
+          <p>
+            Selecciona tu sucursal inicial y continúa con tu cuenta corporativa.
+          </p>
+          <label className="login-branch">
+            Sucursal
+            <select
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+            >
+              {branches
+                .filter((b) => b.active !== false)
+                .map((b) => (
+                  <option value={b.id} key={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <button className="google-button" onClick={() => onLogin(branchId)}>
+            <img
+              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+              alt=""
+            />
+            Continuar con Google
+          </button>
+          <div className="security-note">
+            Acceso protegido mediante Google OAuth 2.0
+          </div>
+          <p className="legal">
+            Al continuar, aceptas nuestros <a>Términos de servicio</a> y la{" "}
+            <a>Política de privacidad</a>.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
 }
 
-function MedicineModal({medicine,onClose,onSave}){
- const [form,setForm]=useState(medicine||{name:'',category:'Analgésicos y antipiréticos',barcode:'',sku:'',lab:'Genfar',presentation:'Tabletas',buyPrice:'',margin:30,min:10,stock:0})
- const [barcodeEnabled,setBarcodeEnabled]=useState(Boolean(medicine?.barcode))
- const sellPrice=Math.round(Number(form.buyPrice||0)*(1+Number(form.margin||0)/100))
- const change=e=>setForm({...form,[e.target.name]:e.target.value})
- return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><section className="modal-card"><header><div><p className="eyebrow">INVENTARIO FARMACÉUTICO</p><h2>{medicine?'Editar medicamento':'Nuevo medicamento'}</h2></div><button className="icon-button" onClick={onClose}><X/></button></header><form onSubmit={e=>{e.preventDefault();onSave({...form,buyPrice:Number(form.buyPrice),sellPrice,margin:Number(form.margin),min:Number(form.min),stock:Number(form.stock),barcode:barcodeEnabled?form.barcode:''})}}><div className="form-grid"><label className="wide">Nombre del medicamento<input name="name" value={form.name} onChange={change} placeholder="Ej. Acetaminofén 500 mg" required/></label><label>Categoría terapéutica<select name="category" value={form.category} onChange={change}>{categories.map(x=><option key={x}>{x}</option>)}</select></label><label>Código interno / SKU<input name="sku" value={form.sku} onChange={change} placeholder="MED-001" required/></label><label>Código de barras<div className="input-action"><input name="barcode" value={form.barcode} onChange={change} disabled={!barcodeEnabled} placeholder={barcodeEnabled?'Escanea o escribe el código':'Código deshabilitado'}/><button type="button" title="Simular escaneo" disabled={!barcodeEnabled} onClick={()=>setForm({...form,barcode:String(Date.now()).slice(-13)})}><ScanLine size={18}/></button></div><span className="check-row"><input type="checkbox" checked={barcodeEnabled} onChange={e=>setBarcodeEnabled(e.target.checked)}/> Habilitar código de barras</span></label><label>Laboratorio<select name="lab" value={form.lab} onChange={change}>{labs.map(x=><option key={x}>{x}</option>)}</select></label><label>Presentación<select name="presentation" value={form.presentation} onChange={change}>{presentations.map(x=><option key={x}>{x}</option>)}</select></label><label>Precio de compra ($)<input type="number" min="0" name="buyPrice" value={form.buyPrice} onChange={change} required/></label><label>Margen de venta (%)<input type="number" min="0" name="margin" value={form.margin} onChange={change} required/></label><label>Precio de venta calculado<div className="calculated">{money(sellPrice)}<small>Compra + {form.margin||0}%</small></div></label><label>Stock mínimo permanente<input type="number" min="0" name="min" value={form.min} onChange={change} required/></label><label>Stock actual<input type="number" min="0" name="stock" value={form.stock} onChange={change} required/></label></div><footer><button type="button" className="button secondary" onClick={onClose}>Cancelar</button><button className="button primary">{medicine?'Guardar cambios':'Agregar medicamento'}</button></footer></form></section></div>
+function CredentialLogin({ onLogin }) {
+  const [email, setEmail] = useState("admin@pharmasys.com"),
+    [password, setPassword] = useState("Admin2026!"),
+    [show, setShow] = useState(false),
+    [error, setError] = useState(""),
+    [loading, setLoading] = useState(false);
+  const submit = (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    setTimeout(() => {
+      const users =
+          JSON.parse(localStorage.getItem("pharma-users") || "null") ||
+          defaultUsers,
+        user = users.find(
+          (u) =>
+            u.active &&
+            u.email.toLowerCase() === email.trim().toLowerCase() &&
+            u.password === password,
+        );
+      setLoading(false);
+      if (user) onLogin(user);
+      else setError("Correo o contraseña incorrectos, o usuario inactivo.");
+    }, 350);
+  };
+  return (
+    <main className="login-shell">
+      <section className="login-brand">
+        <div className="brand">
+          <span>
+            <FlaskConical size={23} />
+          </span>
+          PharmaSys
+        </div>
+        <div>
+          <p className="eyebrow light">GESTIÓN FARMACÉUTICA MULTI-SUCURSAL</p>
+          <h1>
+            Control por sede.
+            <br />
+            Acceso por responsabilidades.
+          </h1>
+          <p>
+            Administra inventarios, colaboradores y reportes con permisos
+            específicos para cada farmacia.
+          </p>
+          <div className="login-stats">
+            <div>
+              <b>Seguro</b>
+              <small>Roles y permisos</small>
+            </div>
+            <div>
+              <b>24/7</b>
+              <small>Monitoreo</small>
+            </div>
+            <div>
+              <b>100%</b>
+              <small>Trazabilidad</small>
+            </div>
+          </div>
+        </div>
+        <small>PharmaSys · Gestión segura y centralizada</small>
+      </section>
+      <section className="login-panel">
+        <div className="login-card">
+          <div className="brand mobile">
+            <span>
+              <FlaskConical size={21} />
+            </span>
+            PharmaSys
+          </div>
+          <p className="eyebrow">ACCESO SEGURO</p>
+          <h2>Inicia sesión</h2>
+          <p>Ingresa con las credenciales asignadas por el administrador.</p>
+          {error && <div className="login-error">{error}</div>}
+          <form className="credential-form" onSubmit={submit}>
+            <label>
+              Correo electrónico
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </label>
+            <label>
+              Contraseña
+              <div className="password-field">
+                <input
+                  type={show ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+                <button type="button" onClick={() => setShow(!show)}>
+                  {show ? <EyeOff /> : <Eye />}
+                </button>
+              </div>
+            </label>
+            <div className="login-options">
+              <label>
+                <input type="checkbox" /> Recordarme
+              </label>
+              <button type="button">¿Olvidaste tu contraseña?</button>
+            </div>
+            <button className="button primary login-submit" disabled={loading}>
+              {loading ? "Validando…" : "Iniciar sesión"}
+            </button>
+          </form>
+          <div className="login-divider">
+            <span>O continúa con</span>
+          </div>
+          <button
+            className="google-button compact"
+            onClick={() => onLogin(defaultUsers[0])}
+          >
+            <img
+              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+              alt=""
+            />
+            Continuar con Google
+          </button>
+          <p className="demo-access">Admin: admin@pharmasys.com · Admin2026!</p>
+          <p className="legal">
+            Al continuar, aceptas los <a>Términos</a> y la{" "}
+            <a>Política de privacidad</a>.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
 }
 
-function Sidebar({active,setActive,open,setOpen,user}){
- const visible=user.role==='ADMIN'?nav:nav.filter(([label])=>['Dashboard','Inventario','Punto de Venta (POS)'].includes(label))
- return <><div className={`mobile-overlay ${open?'show':''}`} onClick={()=>setOpen(false)}/><aside className={`sidebar ${open?'open':''}`}><div className="brand"><span><FlaskConical size={22}/></span>PharmaSys<button onClick={()=>setOpen(false)}><X/></button></div><nav>{visible.map(([label,Icon])=><button key={label} className={active===label?'active':''} onClick={()=>{setActive(label);setOpen(false)}}><Icon size={19}/>{label}</button>)}</nav><div className="help"><Users size={20}/><b>{user.role==='ADMIN'?'Acceso administrador':'Acceso de inventario'}</b><p>{user.role==='ADMIN'?'Gestiona todas las sedes y sus usuarios.':'Solo puedes operar la sucursal asignada.'}</p></div></aside></>
+function MedicineModal({ medicine, onClose, onSave }) {
+  const [form, setForm] = useState(
+    medicine || {
+      name: "",
+      category: "Analgésicos y antipiréticos",
+      barcode: "",
+      sku: "",
+      lab: "Genfar",
+      presentation: "Tabletas",
+      buyPrice: "",
+      margin: 30,
+      min: 10,
+      stock: 0,
+    },
+  );
+  const [barcodeEnabled, setBarcodeEnabled] = useState(
+    Boolean(medicine?.barcode),
+  );
+  const sellPrice = Math.round(
+    Number(form.buyPrice || 0) * (1 + Number(form.margin || 0) / 100),
+  );
+  const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <section className="modal-card">
+        <header>
+          <div>
+            <p className="eyebrow">INVENTARIO FARMACÉUTICO</p>
+            <h2>{medicine ? "Editar medicamento" : "Nuevo medicamento"}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose}>
+            <X />
+          </button>
+        </header>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSave({
+              ...form,
+              buyPrice: Number(form.buyPrice),
+              sellPrice,
+              margin: Number(form.margin),
+              min: Number(form.min),
+              stock: Number(form.stock),
+              barcode: barcodeEnabled ? form.barcode : "",
+            });
+          }}
+        >
+          <div className="form-grid">
+            <label className="wide">
+              Nombre del medicamento
+              <input
+                name="name"
+                value={form.name}
+                onChange={change}
+                placeholder="Ej. Acetaminofén 500 mg"
+                required
+              />
+            </label>
+            <label>
+              Categoría terapéutica
+              <select name="category" value={form.category} onChange={change}>
+                {categories.map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Código interno / SKU
+              <input
+                name="sku"
+                value={form.sku}
+                onChange={change}
+                placeholder="MED-001"
+                required
+              />
+            </label>
+            <label>
+              Código de barras
+              <div className="input-action">
+                <input
+                  name="barcode"
+                  value={form.barcode}
+                  onChange={change}
+                  disabled={!barcodeEnabled}
+                  placeholder={
+                    barcodeEnabled
+                      ? "Escanea o escribe el código"
+                      : "Código deshabilitado"
+                  }
+                />
+                <button
+                  type="button"
+                  title="Simular escaneo"
+                  disabled={!barcodeEnabled}
+                  onClick={() =>
+                    setForm({ ...form, barcode: String(Date.now()).slice(-13) })
+                  }
+                >
+                  <ScanLine size={18} />
+                </button>
+              </div>
+              <span className="check-row">
+                <input
+                  type="checkbox"
+                  checked={barcodeEnabled}
+                  onChange={(e) => setBarcodeEnabled(e.target.checked)}
+                />{" "}
+                Habilitar código de barras
+              </span>
+            </label>
+            <label>
+              Laboratorio
+              <select name="lab" value={form.lab} onChange={change}>
+                {labs.map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Presentación
+              <select
+                name="presentation"
+                value={form.presentation}
+                onChange={change}
+              >
+                {presentations.map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Precio de compra ($)
+              <input
+                type="number"
+                min="0"
+                name="buyPrice"
+                value={form.buyPrice}
+                onChange={change}
+                required
+              />
+            </label>
+            <label>
+              Margen de venta (%)
+              <input
+                type="number"
+                min="0"
+                name="margin"
+                value={form.margin}
+                onChange={change}
+                required
+              />
+            </label>
+            <label>
+              Precio de venta calculado
+              <div className="calculated">
+                {money(sellPrice)}
+                <small>Compra + {form.margin || 0}%</small>
+              </div>
+            </label>
+            <label>
+              Stock mínimo permanente
+              <input
+                type="number"
+                min="0"
+                name="min"
+                value={form.min}
+                onChange={change}
+                required
+              />
+            </label>
+            <label>
+              Stock actual
+              <input
+                type="number"
+                min="0"
+                name="stock"
+                value={form.stock}
+                onChange={change}
+                required
+              />
+            </label>
+          </div>
+          <footer>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={onClose}
+            >
+              Cancelar
+            </button>
+            <button className="button primary">
+              {medicine ? "Guardar cambios" : "Agregar medicamento"}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
 }
 
-function Inventory({items,setItems,branchId,onAdd,initialQuery=''}){
- const [query,setQuery]=useState(initialQuery),[category,setCategory]=useState('Todas'),[lab,setLab]=useState('Todos'),[presentation,setPresentation]=useState('Todas'),[alert,setAlert]=useState('Todos'),[showCode,setShowCode]=useState(true),[editing,setEditing]=useState(null)
- useEffect(()=>setQuery(initialQuery),[initialQuery])
- const rows=useMemo(()=>items.filter(p=>(`${p.name} ${p.sku} ${p.barcode}`).toLowerCase().includes(query.toLowerCase())&&(category==='Todas'||p.category===category)&&(lab==='Todos'||p.lab===lab)&&(presentation==='Todas'||p.presentation===presentation)&&(alert==='Todos'||getStatus(p)[0]===alert)),[items,query,category,lab,presentation,alert])
- const save=m=>{setItems(items.map(x=>x.id===m.id?m:x));setEditing(null)}
- const remove=p=>confirm(`¿Eliminar ${p.name}?`)&&setItems(items.filter(x=>x.id!==p.id))
- const restock=p=>{const amount=Number(prompt(`Cantidad para reabastecer ${p.name}:`,10));if(amount>0)setItems(items.map(x=>x.id===p.id?{...x,stock:x.stock+amount}:x))}
- return <><section className="page-heading"><div><p className="eyebrow">CONTROL DE EXISTENCIAS</p><h1>Inventario de medicamentos</h1><p>{rows.length} medicamentos en la sucursal seleccionada</p></div><button className="button primary" onClick={onAdd}><Plus size={18}/>Nuevo medicamento</button></section><section className="filter-card"><div className="search-box"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por nombre, SKU o código de barras"/></div><select value={category} onChange={e=>setCategory(e.target.value)}><option>Todas</option>{categories.map(x=><option key={x}>{x}</option>)}</select><select value={lab} onChange={e=>setLab(e.target.value)}><option>Todos</option>{labs.map(x=><option key={x}>{x}</option>)}</select><select value={presentation} onChange={e=>setPresentation(e.target.value)}><option>Todas</option>{presentations.map(x=><option key={x}>{x}</option>)}</select><select value={alert} onChange={e=>setAlert(e.target.value)}><option>Todos</option><option>En Stock</option><option>Stock Crítico</option><option>Agotado</option></select><button className="button ghost" onClick={()=>setShowCode(!showCode)}>{showCode?<EyeOff size={17}/>:<Eye size={17}/>}Código</button></section><section className="table-card"><div className="table-scroll"><table><thead><tr>{showCode&&<th>Código / Barcode</th>}<th>Medicamento</th><th>Laboratorio</th><th>Precio compra</th><th>Precio venta</th><th>Stock</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{rows.map(p=>{const [label,tone]=getStatus(p),percent=Math.min(100,p.stock/Math.max(p.min*3,1)*100);return <tr key={p.id}>{showCode&&<td><b>{p.sku}</b><small>{p.barcode||'Sin barcode'}</small></td>}<td><div className="medicine"><span><Package size={19}/></span><div><b>{p.name}</b><small>{p.presentation}</small></div></div></td><td><span className="lab-badge">{p.lab}</span></td><td>{money(p.buyPrice)}</td><td><b>{money(p.sellPrice)}</b></td><td><div className="stock-number"><b>{p.stock}</b><small>Mín. {p.min}</small></div><div className={`stock-bar ${tone}`}><i style={{width:`${percent}%`}}/></div></td><td><span className={`status ${tone}`}>{label}</span></td><td><div className="row-actions"><button title="Editar" onClick={()=>setEditing(p)}><Edit3/></button><button title="Reabastecer" onClick={()=>restock(p)}><RefreshCw/></button><button title="Eliminar" className="delete" onClick={()=>remove(p)}><Trash2/></button></div></td></tr>})}</tbody></table></div>{!rows.length&&<div className="empty"><Package/><b>No hay medicamentos</b><p>Ajusta los filtros o agrega el primer medicamento de esta sucursal.</p></div>}</section>{editing&&<MedicineModal medicine={editing} onClose={()=>setEditing(null)} onSave={save}/>}</>
+function Sidebar({ active, setActive, open, setOpen, user }) {
+  const visible =
+    user.role === "ADMIN"
+      ? nav
+      : nav.filter(([label]) =>
+          ["Dashboard", "Inventario", "Punto de Venta (POS)"].includes(label),
+        );
+  return (
+    <>
+      <div
+        className={`mobile-overlay ${open ? "show" : ""}`}
+        onClick={() => setOpen(false)}
+      />
+      <aside className={`sidebar ${open ? "open" : ""}`}>
+        <div className="brand">
+          <span>
+            <FlaskConical size={22} />
+          </span>
+          PharmaSys
+          <button onClick={() => setOpen(false)}>
+            <X />
+          </button>
+        </div>
+        <nav>
+          {visible.map(([label, Icon]) => (
+            <button
+              key={label}
+              className={active === label ? "active" : ""}
+              onClick={() => {
+                setActive(label);
+                setOpen(false);
+              }}
+            >
+              <Icon size={19} />
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="help">
+          <Users size={20} />
+          <b>
+            {user.role === "ADMIN"
+              ? "Acceso administrador"
+              : "Acceso de inventario"}
+          </b>
+          <p>
+            {user.role === "ADMIN"
+              ? "Gestiona todas las sedes y sus usuarios."
+              : "Solo puedes operar la sucursal asignada."}
+          </p>
+        </div>
+      </aside>
+    </>
+  );
 }
 
-function Dashboard({items,branch,onInventory}){const critical=items.filter(p=>p.stock<=p.min),value=items.reduce((s,p)=>s+p.stock*p.buyPrice,0);return <><section className="page-heading"><div><p className="eyebrow">{branch.name.toUpperCase()}</p><h1>Buenos días, Alex</h1><p>Este es el estado general de tu inventario hoy.</p></div><button className="button secondary" onClick={onInventory}>Ver inventario</button></section><div className="kpi-grid">{[[Package,'Medicamentos',items.length,'Registrados'],[BarChart3,'Valor del inventario',money(value),'A precio de compra'],[AlertTriangle,'Stock crítico',critical.length,'Requieren atención'],[ShoppingCart,'Ventas de hoy',money(1284500),'+12% vs. ayer']].map(([Icon,label,value,note],i)=><article className="kpi" key={label}><span className={`kpi-icon c${i}`}><Icon/></span><div><small>{label}</small><b>{value}</b><p>{note}</p></div></article>)}</div><div className="dashboard-grid"><section className="panel"><header><div><h3>Movimiento del inventario</h3><p>Unidades disponibles durante los últimos 6 meses</p></div></header><div className="chart"><ResponsiveContainer><AreaChart data={trend}><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2563eb" stopOpacity=".25"/><stop offset="1" stopColor="#2563eb" stopOpacity="0"/></linearGradient></defs><CartesianGrid vertical={false} stroke="#e9edf4"/><XAxis dataKey="m" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false}/><Tooltip/><Area dataKey="v" stroke="#2563eb" strokeWidth={3} fill="url(#area)" type="monotone"/></AreaChart></ResponsiveContainer></div></section><section className="panel alerts-panel"><header><div><h3>Alertas de stock</h3><p>Medicamentos que necesitan atención</p></div></header>{critical.slice(0,5).map(p=><div className="alert-row" key={p.id}><span><AlertTriangle/></span><div><b>{p.name}</b><small>{p.stock===0?'Agotado':`${p.stock} unidades disponibles`}</small></div><button onClick={onInventory}>Revisar</button></div>)}{!critical.length&&<div className="empty compact"><b>Todo en orden</b><p>No hay alertas en esta sucursal.</p></div>}</section></div></>}
-
-function SimpleModal({title,onClose,children}){return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><section className="modal-card small-modal"><header><h2>{title}</h2><button className="icon-button" onClick={onClose}><X/></button></header>{children}</section></div>}
-
-function BranchManager({branches,setBranches,inventories,setInventories,branchId,setBranchId}){
- const [form,setForm]=useState(null)
- const save=e=>{e.preventDefault();if(form.id)setBranches(branches.map(b=>b.id===form.id?form:b));else{const id=`sucursal-${Date.now()}`;setBranches([...branches,{...form,id,active:true}]);setInventories({...inventories,[id]:[]})}setForm(null)}
- const remove=b=>{if(b.id===branchId)return alert('No puedes eliminar la sucursal activa.');if((inventories[b.id]||[]).length)return alert('La sucursal tiene inventario. Trasládalo o elimínalo antes.');if(confirm(`¿Eliminar ${b.name}?`))setBranches(branches.filter(x=>x.id!==b.id))}
- return <><section className="page-heading"><div><p className="eyebrow">RED DE FARMACIAS</p><h1>Sucursales</h1><p>Crea, edita y administra todas tus sedes.</p></div><button className="button primary" onClick={()=>setForm({name:'',code:'',address:'',city:'',phone:'',manager:'',active:true})}><Plus/>Nueva sucursal</button></section><div className="branch-grid">{branches.map(b=>{const items=inventories[b.id]||[];return <article className="branch-card" key={b.id}><span><Building2/></span><h3>{b.name}</h3><p>{b.address}{b.city&&` · ${b.city}`}</p><p>{b.phone||'Sin teléfono'} · {b.manager||'Sin responsable'}</p><div><b>{items.length}<small>Medicamentos</small></b><b>{items.reduce((s,p)=>s+p.stock,0)}<small>Unidades</small></b></div><span className={`status ${b.active!==false?'success':'danger'}`}>{b.id===branchId?'Seleccionada':b.active!==false?'Operativa':'Inactiva'}</span><div className="card-actions"><button className="button secondary" disabled={b.id===branchId||b.active===false} onClick={()=>setBranchId(b.id)}>Administrar</button><button className="icon-button" onClick={()=>setForm({...b})}><Edit3/></button><button className="icon-button delete" onClick={()=>remove(b)}><Trash2/></button></div></article>})}</div>{form&&<SimpleModal title={form.id?'Editar sucursal':'Nueva sucursal'} onClose={()=>setForm(null)}><form className="simple-form" onSubmit={save}><div className="form-grid">{[['Nombre','name'],['Código','code'],['Dirección','address'],['Ciudad','city'],['Teléfono','phone'],['Responsable','manager']].map(([label,key])=><label key={key}>{label}<input value={form[key]||''} onChange={e=>setForm({...form,[key]:e.target.value})} required={['name','code'].includes(key)}/></label>)}</div><label className="check-row"><input type="checkbox" checked={form.active!==false} onChange={e=>setForm({...form,active:e.target.checked})}/> Sucursal activa</label><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary">Guardar sucursal</button></footer></form></SimpleModal>}</>
+function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
+  const [query, setQuery] = useState(initialQuery),
+    [category, setCategory] = useState("Todas"),
+    [lab, setLab] = useState("Todos"),
+    [presentation, setPresentation] = useState("Todas"),
+    [alert, setAlert] = useState("Todos"),
+    [showCode, setShowCode] = useState(true),
+    [editing, setEditing] = useState(null);
+  useEffect(() => setQuery(initialQuery), [initialQuery]);
+  const rows = useMemo(
+    () =>
+      items.filter(
+        (p) =>
+          `${p.name} ${p.sku} ${p.barcode}`
+            .toLowerCase()
+            .includes(query.toLowerCase()) &&
+          (category === "Todas" || p.category === category) &&
+          (lab === "Todos" || p.lab === lab) &&
+          (presentation === "Todas" || p.presentation === presentation) &&
+          (alert === "Todos" || getStatus(p)[0] === alert),
+      ),
+    [items, query, category, lab, presentation, alert],
+  );
+  const save = (m) => {
+    setItems(items.map((x) => (x.id === m.id ? m : x)));
+    setEditing(null);
+  };
+  const remove = (p) =>
+    confirm(`¿Eliminar ${p.name}?`) &&
+    setItems(items.filter((x) => x.id !== p.id));
+  const restock = (p) => {
+    const amount = Number(prompt(`Cantidad para reabastecer ${p.name}:`, 10));
+    if (amount > 0)
+      setItems(
+        items.map((x) =>
+          x.id === p.id ? { ...x, stock: x.stock + amount } : x,
+        ),
+      );
+  };
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">CONTROL DE EXISTENCIAS</p>
+          <h1>Inventario de medicamentos</h1>
+          <p>{rows.length} medicamentos en la sucursal seleccionada</p>
+        </div>
+        <button className="button primary" onClick={onAdd}>
+          <Plus size={18} />
+          Nuevo medicamento
+        </button>
+      </section>
+      <section className="filter-card">
+        <div className="search-box">
+          <Search size={18} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por nombre, SKU o código de barras"
+          />
+        </div>
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option>Todas</option>
+          {categories.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select value={lab} onChange={(e) => setLab(e.target.value)}>
+          <option>Todos</option>
+          {labs.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select
+          value={presentation}
+          onChange={(e) => setPresentation(e.target.value)}
+        >
+          <option>Todas</option>
+          {presentations.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select value={alert} onChange={(e) => setAlert(e.target.value)}>
+          <option>Todos</option>
+          <option>En Stock</option>
+          <option>Stock Crítico</option>
+          <option>Agotado</option>
+        </select>
+        <button className="button ghost" onClick={() => setShowCode(!showCode)}>
+          {showCode ? <EyeOff size={17} /> : <Eye size={17} />}Código
+        </button>
+      </section>
+      <section className="table-card">
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                {showCode && <th>Código / Barcode</th>}
+                <th>Medicamento</th>
+                <th>Laboratorio</th>
+                <th>Precio compra</th>
+                <th>Precio venta</th>
+                <th>Stock</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p) => {
+                const [label, tone] = getStatus(p),
+                  percent = Math.min(
+                    100,
+                    (p.stock / Math.max(p.min * 3, 1)) * 100,
+                  );
+                return (
+                  <tr key={p.id}>
+                    {showCode && (
+                      <td>
+                        <b>{p.sku}</b>
+                        <small>{p.barcode || "Sin barcode"}</small>
+                      </td>
+                    )}
+                    <td>
+                      <div className="medicine">
+                        <span>
+                          <Package size={19} />
+                        </span>
+                        <div>
+                          <b>{p.name}</b>
+                          <small>{p.presentation}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="lab-badge">{p.lab}</span>
+                    </td>
+                    <td>{money(p.buyPrice)}</td>
+                    <td>
+                      <b>{money(p.sellPrice)}</b>
+                    </td>
+                    <td>
+                      <div className="stock-number">
+                        <b>{p.stock}</b>
+                        <small>Mín. {p.min}</small>
+                      </div>
+                      <div className={`stock-bar ${tone}`}>
+                        <i style={{ width: `${percent}%` }} />
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`status ${tone}`}>{label}</span>
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        <button title="Editar" onClick={() => setEditing(p)}>
+                          <Edit3 />
+                        </button>
+                        <button title="Reabastecer" onClick={() => restock(p)}>
+                          <RefreshCw />
+                        </button>
+                        <button
+                          title="Eliminar"
+                          className="delete"
+                          onClick={() => remove(p)}
+                        >
+                          <Trash2 />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {!rows.length && (
+          <div className="empty">
+            <Package />
+            <b>No hay medicamentos</b>
+            <p>
+              Ajusta los filtros o agrega el primer medicamento de esta
+              sucursal.
+            </p>
+          </div>
+        )}
+      </section>
+      {editing && (
+        <MedicineModal
+          medicine={editing}
+          onClose={() => setEditing(null)}
+          onSave={save}
+        />
+      )}
+    </>
+  );
 }
 
-function Suppliers({suppliers,setSuppliers}){
- const [form,setForm]=useState(null),[query,setQuery]=useState('');const rows=suppliers.filter(s=>(s.name+s.taxId+s.contact).toLowerCase().includes(query.toLowerCase()))
- const save=e=>{e.preventDefault();if(form.id)setSuppliers(suppliers.map(s=>s.id===form.id?form:s));else setSuppliers([...suppliers,{...form,id:Date.now(),active:true}]);setForm(null)}
- return <><section className="page-heading"><div><p className="eyebrow">ABASTECIMIENTO</p><h1>Proveedores</h1><p>Directorio de laboratorios y distribuidores.</p></div><button className="button primary" onClick={()=>setForm({name:'',taxId:'',contact:'',phone:'',email:'',city:'',active:true})}><Plus/>Nuevo proveedor</button></section><section className="filter-card supplier-filter"><div className="search-box"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar proveedor, NIT o contacto"/></div></section><div className="supplier-grid">{rows.map(s=><article className="supplier-card" key={s.id}><div><span><Truck/></span><span className={`status ${s.active?'success':'danger'}`}>{s.active?'Activo':'Inactivo'}</span></div><h3>{s.name}</h3><p>NIT {s.taxId}</p><dl><dt>Contacto</dt><dd>{s.contact}</dd><dt>Teléfono</dt><dd>{s.phone}</dd><dt>Correo</dt><dd>{s.email}</dd><dt>Ciudad</dt><dd>{s.city}</dd></dl><footer><button className="button secondary" onClick={()=>setForm({...s})}><Edit3/>Editar</button><button className="icon-button delete" onClick={()=>confirm(`¿Eliminar ${s.name}?`)&&setSuppliers(suppliers.filter(x=>x.id!==s.id))}><Trash2/></button></footer></article>)}</div>{form&&<SimpleModal title={form.id?'Editar proveedor':'Nuevo proveedor'} onClose={()=>setForm(null)}><form className="simple-form" onSubmit={save}><div className="form-grid">{[['Razón social','name'],['NIT / RUC','taxId'],['Contacto','contact'],['Teléfono','phone'],['Correo','email'],['Ciudad','city']].map(([label,key])=><label key={key}>{label}<input type={key==='email'?'email':'text'} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} required={['name','taxId'].includes(key)}/></label>)}</div><label className="check-row"><input type="checkbox" checked={form.active} onChange={e=>setForm({...form,active:e.target.checked})}/> Proveedor activo</label><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary">Guardar proveedor</button></footer></form></SimpleModal>}</>
+function Dashboard({ items, branch, onInventory }) {
+  const critical = items.filter((p) => p.stock <= p.min),
+    value = items.reduce((s, p) => s + p.stock * p.buyPrice, 0);
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">{branch.name.toUpperCase()}</p>
+          <h1>Buenos días, Alex</h1>
+          <p>Este es el estado general de tu inventario hoy.</p>
+        </div>
+        <button className="button secondary" onClick={onInventory}>
+          Ver inventario
+        </button>
+      </section>
+      <div className="kpi-grid">
+        {[
+          [Package, "Medicamentos", items.length, "Registrados"],
+          [
+            BarChart3,
+            "Valor del inventario",
+            money(value),
+            "A precio de compra",
+          ],
+          [
+            AlertTriangle,
+            "Stock crítico",
+            critical.length,
+            "Requieren atención",
+          ],
+          [ShoppingCart, "Ventas de hoy", money(1284500), "+12% vs. ayer"],
+        ].map(([Icon, label, value, note], i) => (
+          <article className="kpi" key={label}>
+            <span className={`kpi-icon c${i}`}>
+              <Icon />
+            </span>
+            <div>
+              <small>{label}</small>
+              <b>{value}</b>
+              <p>{note}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="dashboard-grid">
+        <section className="panel">
+          <header>
+            <div>
+              <h3>Movimiento del inventario</h3>
+              <p>Unidades disponibles durante los últimos 6 meses</p>
+            </div>
+          </header>
+          <div className="chart">
+            <ResponsiveContainer>
+              <AreaChart data={trend}>
+                <defs>
+                  <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#2563eb" stopOpacity=".25" />
+                    <stop offset="1" stopColor="#2563eb" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke="#e9edf4" />
+                <XAxis dataKey="m" axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} />
+                <Tooltip />
+                <Area
+                  dataKey="v"
+                  stroke="#2563eb"
+                  strokeWidth={3}
+                  fill="url(#area)"
+                  type="monotone"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+        <section className="panel alerts-panel">
+          <header>
+            <div>
+              <h3>Alertas de stock</h3>
+              <p>Medicamentos que necesitan atención</p>
+            </div>
+          </header>
+          {critical.slice(0, 5).map((p) => (
+            <div className="alert-row" key={p.id}>
+              <span>
+                <AlertTriangle />
+              </span>
+              <div>
+                <b>{p.name}</b>
+                <small>
+                  {p.stock === 0
+                    ? "Agotado"
+                    : `${p.stock} unidades disponibles`}
+                </small>
+              </div>
+              <button onClick={onInventory}>Revisar</button>
+            </div>
+          ))}
+          {!critical.length && (
+            <div className="empty compact">
+              <b>Todo en orden</b>
+              <p>No hay alertas en esta sucursal.</p>
+            </div>
+          )}
+        </section>
+      </div>
+    </>
+  );
 }
 
-function Sales({items,setItems,sales,setSales,branch}){
- const [form,setForm]=useState(null)
- const total=form?Number(form.qty||0)*(items.find(p=>p.id===Number(form.productId))?.sellPrice||0):0
- const save=e=>{e.preventDefault();const product=items.find(p=>p.id===Number(form.productId)),qty=Number(form.qty);if(!product||qty<1)return;if(qty>product.stock)return alert('No hay stock suficiente para completar la venta.');setItems(items.map(p=>p.id===product.id?{...p,stock:p.stock-qty}:p));setSales([{id:Date.now(),branchId:branch.id,product:product.name,sku:product.sku,qty,total:qty*product.sellPrice,customer:form.customer||'Consumidor final',date:new Date().toLocaleString('es-CO')},...sales]);setForm(null)}
- const rows=sales.filter(s=>s.branchId===branch.id)
- return <><section className="page-heading"><div><p className="eyebrow">PUNTO DE VENTA</p><h1>Ventas</h1><p>Historial de {branch.name}.</p></div><button className="button primary" disabled={!items.length} onClick={()=>setForm({productId:items[0]?.id,qty:1,customer:''})}><Plus/>Registrar venta</button></section><div className="kpi-grid sales-kpis"><article className="kpi"><span className="kpi-icon c1"><ShoppingCart/></span><div><small>Ventas registradas</small><b>{rows.length}</b><p>Sucursal actual</p></div></article><article className="kpi"><span className="kpi-icon"><BarChart3/></span><div><small>Total vendido</small><b>{money(rows.reduce((s,x)=>s+x.total,0))}</b><p>Histórico local</p></div></article></div><section className="table-card sales-table"><div className="table-scroll"><table><thead><tr><th>Fecha</th><th>Medicamento</th><th>Cliente</th><th>Cantidad</th><th>Total</th></tr></thead><tbody>{rows.map(s=><tr key={s.id}><td>{s.date}</td><td><b>{s.product}</b><small>{s.sku}</small></td><td>{s.customer}</td><td>{s.qty}</td><td><b>{money(s.total)}</b></td></tr>)}</tbody></table></div>{!rows.length&&<div className="empty"><ShoppingCart/><b>Sin ventas registradas</b><p>Registra la primera venta de esta sucursal.</p></div>}</section>{form&&<SimpleModal title="Registrar venta" onClose={()=>setForm(null)}><form className="simple-form" onSubmit={save}><div className="form-grid"><label className="wide">Medicamento<select value={form.productId} onChange={e=>setForm({...form,productId:e.target.value})}>{items.filter(p=>p.stock>0).map(p=><option value={p.id} key={p.id}>{p.name} · {p.stock} disponibles</option>)}</select></label><label>Cantidad<input type="number" min="1" value={form.qty} onChange={e=>setForm({...form,qty:e.target.value})}/></label><label>Cliente<input value={form.customer} onChange={e=>setForm({...form,customer:e.target.value})} placeholder="Consumidor final"/></label></div><div className="sale-total"><span>Total de la venta</span><b>{money(total)}</b></div><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary">Confirmar venta</button></footer></form></SimpleModal>}</>
+function SimpleModal({ title, onClose, children }) {
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <section className="modal-card small-modal">
+        <header>
+          <h2>{title}</h2>
+          <button className="icon-button" onClick={onClose}>
+            <X />
+          </button>
+        </header>
+        {children}
+      </section>
+    </div>
+  );
 }
 
-function Alerts({items,setItems,branch}){const alerts=items.filter(p=>p.stock<=p.min);const restock=p=>{const qty=Number(prompt(`Cantidad a ingresar para ${p.name}:`,Math.max(p.min*2-p.stock,1)));if(qty>0)setItems(items.map(x=>x.id===p.id?{...x,stock:x.stock+qty}:x))};return <><section className="page-heading"><div><p className="eyebrow">REABASTECIMIENTO</p><h1>Alertas</h1><p>{alerts.length} alertas activas en {branch.name}.</p></div></section><section className="alert-list">{alerts.map(p=>{const [label,tone]=getStatus(p);return <article key={p.id}><span className={tone}><AlertTriangle/></span><div><b>{p.name}</b><p>{p.sku} · {p.presentation} · {p.lab}</p></div><div className="alert-stock"><b>{p.stock}</b><small>Mínimo {p.min}</small></div><span className={`status ${tone}`}>{label}</span><button className="button primary" onClick={()=>restock(p)}><RefreshCw/>Reabastecer</button></article>})}{!alerts.length&&<div className="empty page-empty"><Bell/><b>Inventario saludable</b><p>No existen medicamentos agotados o en nivel crítico.</p></div>}</section></>}
-
-function UserManagement({users,setUsers,branches}){
- const [form,setForm]=useState(null),[showPassword,setShowPassword]=useState(false)
- const save=e=>{e.preventDefault();const payload={...form,branchIds:form.role==='ADMIN'?branches.map(b=>b.id):[form.branchId],active:form.active!==false};delete payload.branchId;if(form.id)setUsers(users.map(u=>u.id===form.id?payload:u));else setUsers([...users,{...payload,id:Date.now()}]);setForm(null)}
- const edit=u=>setForm({...u,branchId:u.branchIds?.[0]||branches[0]?.id})
- return <><section className="page-heading"><div><p className="eyebrow">SEGURIDAD Y PERMISOS</p><h1>Usuarios y accesos</h1><p>Crea credenciales y asigna responsables a cada farmacia.</p></div><button className="button primary" onClick={()=>setForm({name:'',email:'',password:'',role:'INVENTARIO',branchId:branches[0]?.id,active:true})}><Plus/>Nuevo usuario</button></section><section className="table-card user-table"><div className="table-scroll"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Sucursales autorizadas</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{users.map(u=><tr key={u.id}><td><div className="medicine"><span><Users/></span><div><b>{u.name}</b><small>{u.email}</small></div></div></td><td><span className="lab-badge">{u.role==='ADMIN'?'Administrador':'Encargado de inventario'}</span></td><td>{u.role==='ADMIN'?'Todas las sucursales':u.branchIds.map(id=>branches.find(b=>b.id===id)?.name).filter(Boolean).join(', ')}</td><td><span className={`status ${u.active?'success':'danger'}`}>{u.active?'Activo':'Inactivo'}</span></td><td><div className="row-actions"><button title="Editar" onClick={()=>edit(u)}><Edit3/></button>{u.role!=='ADMIN'&&<button title="Eliminar" className="delete" onClick={()=>confirm(`¿Eliminar el acceso de ${u.name}?`)&&setUsers(users.filter(x=>x.id!==u.id))}><Trash2/></button>}</div></td></tr>)}</tbody></table></div></section>{form&&<SimpleModal title={form.id?'Editar credenciales':'Crear credenciales'} onClose={()=>setForm(null)}><form className="simple-form" onSubmit={save}><div className="form-grid"><label>Nombre completo<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></label><label>Correo de acceso<input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required/></label><label>Contraseña temporal<div className="password-field"><input type={showPassword?'text':'password'} value={form.password} onChange={e=>setForm({...form,password:e.target.value})} minLength="8" required/><button type="button" onClick={()=>setShowPassword(!showPassword)}>{showPassword?<EyeOff/>:<Eye/>}</button></div></label><label>Rol<select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="INVENTARIO">Encargado de inventario</option><option value="ADMIN">Administrador</option></select></label>{form.role!=='ADMIN'&&<label className="wide">Sucursal asignada<select value={form.branchId} onChange={e=>setForm({...form,branchId:e.target.value})}>{branches.filter(b=>b.active!==false).map(b=><option value={b.id} key={b.id}>{b.name}</option>)}</select></label>}</div><label className="check-row"><input type="checkbox" checked={form.active!==false} onChange={e=>setForm({...form,active:e.target.checked})}/> Usuario activo</label><div className="credential-note">El encargado utilizará este correo y contraseña para ingresar. Solo tendrá acceso operativo a la sucursal asignada.</div><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary">Guardar credenciales</button></footer></form></SimpleModal>}</>
+function BranchManager({
+  branches,
+  setBranches,
+  inventories,
+  setInventories,
+  branchId,
+  setBranchId,
+}) {
+  const [form, setForm] = useState(null);
+  const save = (e) => {
+    e.preventDefault();
+    if (form.id)
+      setBranches(branches.map((b) => (b.id === form.id ? form : b)));
+    else {
+      const id = `sucursal-${Date.now()}`;
+      setBranches([...branches, { ...form, id, active: true }]);
+      setInventories({ ...inventories, [id]: [] });
+    }
+    setForm(null);
+  };
+  const remove = (b) => {
+    if (b.id === branchId)
+      return alert("No puedes eliminar la sucursal activa.");
+    if ((inventories[b.id] || []).length)
+      return alert(
+        "La sucursal tiene inventario. Trasládalo o elimínalo antes.",
+      );
+    if (confirm(`¿Eliminar ${b.name}?`))
+      setBranches(branches.filter((x) => x.id !== b.id));
+  };
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">RED DE FARMACIAS</p>
+          <h1>Sucursales</h1>
+          <p>Crea, edita y administra todas tus sedes.</p>
+        </div>
+        <button
+          className="button primary"
+          onClick={() =>
+            setForm({
+              name: "",
+              code: "",
+              address: "",
+              city: "",
+              phone: "",
+              manager: "",
+              active: true,
+            })
+          }
+        >
+          <Plus />
+          Nueva sucursal
+        </button>
+      </section>
+      <div className="branch-grid">
+        {branches.map((b) => {
+          const items = inventories[b.id] || [];
+          return (
+            <article className="branch-card" key={b.id}>
+              <span>
+                <Building2 />
+              </span>
+              <h3>{b.name}</h3>
+              <p>
+                {b.address}
+                {b.city && ` · ${b.city}`}
+              </p>
+              <p>
+                {b.phone || "Sin teléfono"} · {b.manager || "Sin responsable"}
+              </p>
+              <div>
+                <b>
+                  {items.length}
+                  <small>Medicamentos</small>
+                </b>
+                <b>
+                  {items.reduce((s, p) => s + p.stock, 0)}
+                  <small>Unidades</small>
+                </b>
+              </div>
+              <span
+                className={`status ${b.active !== false ? "success" : "danger"}`}
+              >
+                {b.id === branchId
+                  ? "Seleccionada"
+                  : b.active !== false
+                    ? "Operativa"
+                    : "Inactiva"}
+              </span>
+              <div className="card-actions">
+                <button
+                  className="button secondary"
+                  disabled={b.id === branchId || b.active === false}
+                  onClick={() => setBranchId(b.id)}
+                >
+                  Administrar
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={() => setForm({ ...b })}
+                >
+                  <Edit3 />
+                </button>
+                <button
+                  className="icon-button delete"
+                  onClick={() => remove(b)}
+                >
+                  <Trash2 />
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {form && (
+        <SimpleModal
+          title={form.id ? "Editar sucursal" : "Nueva sucursal"}
+          onClose={() => setForm(null)}
+        >
+          <form className="simple-form" onSubmit={save}>
+            <div className="form-grid">
+              {[
+                ["Nombre", "name"],
+                ["Código", "code"],
+                ["Dirección", "address"],
+                ["Ciudad", "city"],
+                ["Teléfono", "phone"],
+                ["Responsable", "manager"],
+              ].map(([label, key]) => (
+                <label key={key}>
+                  {label}
+                  <input
+                    value={form[key] || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, [key]: e.target.value })
+                    }
+                    required={["name", "code"].includes(key)}
+                  />
+                </label>
+              ))}
+            </div>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={form.active !== false}
+                onChange={(e) => setForm({ ...form, active: e.target.checked })}
+              />{" "}
+              Sucursal activa
+            </label>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setForm(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary">Guardar sucursal</button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
+    </>
+  );
 }
 
-function Reports({items,sales,branch}){const rows=sales.filter(s=>s.branchId===branch.id);const download=(name,data)=>{const csv=data.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv'}));a.download=name;a.click();URL.revokeObjectURL(a.href)};return <><section className="page-heading"><div><p className="eyebrow">ANÁLISIS OPERATIVO</p><h1>Reportes</h1><p>Indicadores y exportaciones de {branch.name}.</p></div></section><div className="kpi-grid">{[['Productos',items.length],['Unidades',items.reduce((s,p)=>s+p.stock,0)],['Stock crítico',items.filter(p=>p.stock<=p.min).length],['Ventas',money(rows.reduce((s,v)=>s+v.total,0))]].map(([label,value])=><article className="kpi" key={label}><span className="kpi-icon"><BarChart3/></span><div><small>{label}</small><b>{value}</b><p>Sucursal seleccionada</p></div></article>)}</div><div className="report-grid"><article className="panel"><Package/><h3>Inventario completo</h3><p>Existencias, categorías, precios y laboratorios.</p><button className="button secondary" onClick={()=>download('inventario.csv',[['SKU','Medicamento','Categoría','Laboratorio','Stock','Mínimo','Precio venta'],...items.map(p=>[p.sku,p.name,p.category,p.lab,p.stock,p.min,p.sellPrice])])}>Descargar CSV</button></article><article className="panel"><AlertTriangle/><h3>Stock crítico</h3><p>Medicamentos agotados o bajo el mínimo.</p><button className="button secondary" onClick={()=>download('stock-critico.csv',[['SKU','Medicamento','Stock','Mínimo'],...items.filter(p=>p.stock<=p.min).map(p=>[p.sku,p.name,p.stock,p.min])])}>Descargar CSV</button></article><article className="panel"><ShoppingCart/><h3>Historial de ventas</h3><p>Ventas realizadas en la sucursal seleccionada.</p><button className="button secondary" onClick={()=>download('ventas.csv',[['Fecha','Medicamento','Cliente','Cantidad','Total'],...rows.map(v=>[v.date,v.product,v.customer,v.qty,v.total])])}>Descargar CSV</button></article></div></>}
+function Suppliers({ suppliers, setSuppliers }) {
+  const [form, setForm] = useState(null),
+    [query, setQuery] = useState("");
+  const rows = suppliers.filter((s) =>
+    (s.name + s.taxId + s.contact).toLowerCase().includes(query.toLowerCase()),
+  );
+  const save = (e) => {
+    e.preventDefault();
+    if (form.id)
+      setSuppliers(suppliers.map((s) => (s.id === form.id ? form : s)));
+    else
+      setSuppliers([...suppliers, { ...form, id: Date.now(), active: true }]);
+    setForm(null);
+  };
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">ABASTECIMIENTO</p>
+          <h1>Proveedores</h1>
+          <p>Directorio de laboratorios y distribuidores.</p>
+        </div>
+        <button
+          className="button primary"
+          onClick={() =>
+            setForm({
+              name: "",
+              taxId: "",
+              contact: "",
+              phone: "",
+              email: "",
+              city: "",
+              active: true,
+            })
+          }
+        >
+          <Plus />
+          Nuevo proveedor
+        </button>
+      </section>
+      <section className="filter-card supplier-filter">
+        <div className="search-box">
+          <Search />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar proveedor, NIT o contacto"
+          />
+        </div>
+      </section>
+      <div className="supplier-grid">
+        {rows.map((s) => (
+          <article className="supplier-card" key={s.id}>
+            <div>
+              <span>
+                <Truck />
+              </span>
+              <span className={`status ${s.active ? "success" : "danger"}`}>
+                {s.active ? "Activo" : "Inactivo"}
+              </span>
+            </div>
+            <h3>{s.name}</h3>
+            <p>NIT {s.taxId}</p>
+            <dl>
+              <dt>Contacto</dt>
+              <dd>{s.contact}</dd>
+              <dt>Teléfono</dt>
+              <dd>{s.phone}</dd>
+              <dt>Correo</dt>
+              <dd>{s.email}</dd>
+              <dt>Ciudad</dt>
+              <dd>{s.city}</dd>
+            </dl>
+            <footer>
+              <button
+                className="button secondary"
+                onClick={() => setForm({ ...s })}
+              >
+                <Edit3 />
+                Editar
+              </button>
+              <button
+                className="icon-button delete"
+                onClick={() =>
+                  confirm(`¿Eliminar ${s.name}?`) &&
+                  setSuppliers(suppliers.filter((x) => x.id !== s.id))
+                }
+              >
+                <Trash2 />
+              </button>
+            </footer>
+          </article>
+        ))}
+      </div>
+      {form && (
+        <SimpleModal
+          title={form.id ? "Editar proveedor" : "Nuevo proveedor"}
+          onClose={() => setForm(null)}
+        >
+          <form className="simple-form" onSubmit={save}>
+            <div className="form-grid">
+              {[
+                ["Razón social", "name"],
+                ["NIT / RUC", "taxId"],
+                ["Contacto", "contact"],
+                ["Teléfono", "phone"],
+                ["Correo", "email"],
+                ["Ciudad", "city"],
+              ].map(([label, key]) => (
+                <label key={key}>
+                  {label}
+                  <input
+                    type={key === "email" ? "email" : "text"}
+                    value={form[key]}
+                    onChange={(e) =>
+                      setForm({ ...form, [key]: e.target.value })
+                    }
+                    required={["name", "taxId"].includes(key)}
+                  />
+                </label>
+              ))}
+            </div>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={form.active}
+                onChange={(e) => setForm({ ...form, active: e.target.checked })}
+              />{" "}
+              Proveedor activo
+            </label>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setForm(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary">Guardar proveedor</button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
+    </>
+  );
+}
 
-function AdminReports({branches,inventories,sales}){const [selected,setSelected]=useState('ALL'),branch=branches.find(b=>b.id===selected),items=selected==='ALL'?Object.values(inventories).flat():inventories[selected]||[],rows=selected==='ALL'?sales:sales.filter(s=>s.branchId===selected),label=selected==='ALL'?'Todas las farmacias':branch?.name;return <><section className="page-heading report-heading"><div><p className="eyebrow">VISIÓN ADMINISTRATIVA</p><h1>Reportes por farmacia</h1><p>Compara el desempeño consolidado o revisa una sucursal.</p></div><select className="branch-select" value={selected} onChange={e=>setSelected(e.target.value)}><option value="ALL">Todas las farmacias</option>{branches.map(b=><option value={b.id} key={b.id}>{b.name}</option>)}</select></section><div className="kpi-grid">{[['Medicamentos',items.length],['Unidades disponibles',items.reduce((s,p)=>s+p.stock,0)],['Alertas críticas',items.filter(p=>p.stock<=p.min).length],['Ventas acumuladas',money(rows.reduce((s,v)=>s+v.total,0))]].map(([name,value])=><article className="kpi" key={name}><span className="kpi-icon"><BarChart3/></span><div><small>{name}</small><b>{value}</b><p>{label}</p></div></article>)}</div><section className="table-card branch-report"><table><thead><tr><th>Farmacia</th><th>Medicamentos</th><th>Unidades</th><th>Stock crítico</th><th>Ventas</th></tr></thead><tbody>{branches.filter(b=>selected==='ALL'||b.id===selected).map(b=>{const inv=inventories[b.id]||[],branchSales=sales.filter(s=>s.branchId===b.id);return <tr key={b.id}><td><b>{b.name}</b><small>{b.address}</small></td><td>{inv.length}</td><td>{inv.reduce((s,p)=>s+p.stock,0)}</td><td><span className={`status ${inv.some(p=>p.stock<=p.min)?'warning':'success'}`}>{inv.filter(p=>p.stock<=p.min).length}</span></td><td><b>{money(branchSales.reduce((s,v)=>s+v.total,0))}</b></td></tr>})}</tbody></table></section></>}
+function Sales({ items, setItems, sales, setSales, branch }) {
+  const [form, setForm] = useState(null);
+  const total = form
+    ? Number(form.qty || 0) *
+      (items.find((p) => p.id === Number(form.productId))?.sellPrice || 0)
+    : 0;
+  const save = (e) => {
+    e.preventDefault();
+    const product = items.find((p) => p.id === Number(form.productId)),
+      qty = Number(form.qty);
+    if (!product || qty < 1) return;
+    if (qty > product.stock)
+      return alert("No hay stock suficiente para completar la venta.");
+    setItems(
+      items.map((p) =>
+        p.id === product.id ? { ...p, stock: p.stock - qty } : p,
+      ),
+    );
+    setSales([
+      {
+        id: Date.now(),
+        branchId: branch.id,
+        product: product.name,
+        sku: product.sku,
+        qty,
+        total: qty * product.sellPrice,
+        customer: form.customer || "Consumidor final",
+        date: new Date().toLocaleString("es-CO"),
+      },
+      ...sales,
+    ]);
+    setForm(null);
+  };
+  const rows = sales.filter((s) => s.branchId === branch.id);
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">PUNTO DE VENTA</p>
+          <h1>Ventas</h1>
+          <p>Historial de {branch.name}.</p>
+        </div>
+        <button
+          className="button primary"
+          disabled={!items.length}
+          onClick={() =>
+            setForm({ productId: items[0]?.id, qty: 1, customer: "" })
+          }
+        >
+          <Plus />
+          Registrar venta
+        </button>
+      </section>
+      <div className="kpi-grid sales-kpis">
+        <article className="kpi">
+          <span className="kpi-icon c1">
+            <ShoppingCart />
+          </span>
+          <div>
+            <small>Ventas registradas</small>
+            <b>{rows.length}</b>
+            <p>Sucursal actual</p>
+          </div>
+        </article>
+        <article className="kpi">
+          <span className="kpi-icon">
+            <BarChart3 />
+          </span>
+          <div>
+            <small>Total vendido</small>
+            <b>{money(rows.reduce((s, x) => s + x.total, 0))}</b>
+            <p>Histórico local</p>
+          </div>
+        </article>
+      </div>
+      <section className="table-card sales-table">
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Medicamento</th>
+                <th>Cliente</th>
+                <th>Cantidad</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.date}</td>
+                  <td>
+                    <b>{s.product}</b>
+                    <small>{s.sku}</small>
+                  </td>
+                  <td>{s.customer}</td>
+                  <td>{s.qty}</td>
+                  <td>
+                    <b>{money(s.total)}</b>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!rows.length && (
+          <div className="empty">
+            <ShoppingCart />
+            <b>Sin ventas registradas</b>
+            <p>Registra la primera venta de esta sucursal.</p>
+          </div>
+        )}
+      </section>
+      {form && (
+        <SimpleModal title="Registrar venta" onClose={() => setForm(null)}>
+          <form className="simple-form" onSubmit={save}>
+            <div className="form-grid">
+              <label className="wide">
+                Medicamento
+                <select
+                  value={form.productId}
+                  onChange={(e) =>
+                    setForm({ ...form, productId: e.target.value })
+                  }
+                >
+                  {items
+                    .filter((p) => p.stock > 0)
+                    .map((p) => (
+                      <option value={p.id} key={p.id}>
+                        {p.name} · {p.stock} disponibles
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Cantidad
+                <input
+                  type="number"
+                  min="1"
+                  value={form.qty}
+                  onChange={(e) => setForm({ ...form, qty: e.target.value })}
+                />
+              </label>
+              <label>
+                Cliente
+                <input
+                  value={form.customer}
+                  onChange={(e) =>
+                    setForm({ ...form, customer: e.target.value })
+                  }
+                  placeholder="Consumidor final"
+                />
+              </label>
+            </div>
+            <div className="sale-total">
+              <span>Total de la venta</span>
+              <b>{money(total)}</b>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setForm(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary">Confirmar venta</button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
+    </>
+  );
+}
 
-export default function AppV2(){
- const [currentUser,setCurrentUser]=useState(()=>JSON.parse(localStorage.getItem('pharma-current-user')||'null')),[users,setUsers]=useState(()=>JSON.parse(localStorage.getItem('pharma-users')||'null')||defaultUsers),[branches,setBranches]=useState(()=>JSON.parse(localStorage.getItem('pharma-branches')||'null')||defaultBranches),[branchId,setBranchId]=useState(()=>localStorage.getItem('pharma-branch')||'central'),[inventories,setInventories]=useState(loadInventories),[suppliers,setSuppliers]=useState(()=>JSON.parse(localStorage.getItem('pharma-suppliers')||'null')||defaultSuppliers),[sales,setSales]=useState(()=>JSON.parse(localStorage.getItem('pharma-sales')||'null')||[]),[active,setActive]=useState('Dashboard'),[sidebar,setSidebar]=useState(false),[modal,setModal]=useState(false),[globalQuery,setGlobalQuery]=useState('')
- const searchRef=useRef(null)
- useEffect(()=>localStorage.setItem('pharma-inventories',JSON.stringify(inventories)),[inventories]);useEffect(()=>localStorage.setItem('pharma-branches',JSON.stringify(branches)),[branches]);useEffect(()=>localStorage.setItem('pharma-suppliers',JSON.stringify(suppliers)),[suppliers]);useEffect(()=>localStorage.setItem('pharma-sales',JSON.stringify(sales)),[sales]);useEffect(()=>localStorage.setItem('pharma-users',JSON.stringify(users)),[users]);useEffect(()=>localStorage.setItem('pharma-branch',branchId),[branchId])
- useEffect(()=>{const shortcut=e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();searchRef.current?.focus()}};window.addEventListener('keydown',shortcut);return()=>window.removeEventListener('keydown',shortcut)},[])
- if(!currentUser)return <CredentialLogin onLogin={user=>{const firstBranch=user.role==='ADMIN'?branches[0]?.id:user.branchIds[0];setBranchId(firstBranch);localStorage.setItem('pharma-current-user',JSON.stringify(user));setCurrentUser(user)}}/>
- const items=inventories[branchId]||[],setItems=next=>setInventories({...inventories,[branchId]:next}),branch=branches.find(b=>b.id===branchId)
- const saveNew=m=>{setItems([...items,{...m,id:Date.now()}]);setModal(false);setActive('Inventario')}
- return <div className="app"><Sidebar active={active} setActive={setActive} open={sidebar} setOpen={setSidebar} user={currentUser}/><div className="workspace"><header className="topbar"><button className="menu-button" onClick={()=>setSidebar(true)}><Menu/></button><select className="branch-select" value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.filter(b=>b.active!==false&&(currentUser.role==='ADMIN'||currentUser.branchIds.includes(b.id))).map(b=><option value={b.id} key={b.id}>{b.name}</option>)}</select><div className="global-search"><Search/><input ref={searchRef} value={globalQuery} onChange={e=>setGlobalQuery(e.target.value)} placeholder="Buscar medicamento, SKU o código de barras… (Ctrl+K)" onKeyDown={e=>{if(e.key==='Enter')setActive('Inventario')}}/></div><button className="top-alert" onClick={()=>setActive('Alertas')}><Bell/><i>{items.filter(p=>p.stock<=p.min).length}</i></button><button className="button primary new-med" onClick={()=>setModal(true)}><Plus/>Nuevo Medicamento</button><button className="profile" onClick={()=>{if(confirm('¿Cerrar sesión?')){localStorage.removeItem('pharma-current-user');setCurrentUser(null)}}}><img src="https://lh3.googleusercontent.com/a/default-user=s96-c" alt="Avatar de usuario"/><span><b>{currentUser.name}</b><small>{currentUser.role==='ADMIN'?'Administrador':'Encargado de inventario'}</small></span><ChevronDown/></button></header><main className="content">{active==='Dashboard'?<Dashboard items={items} branch={branch} onInventory={()=>setActive('Inventario')}/>:active==='Inventario'?<Inventory items={items} setItems={setItems} branchId={branchId} initialQuery={globalQuery} onAdd={()=>setModal(true)}/>:active==='Sucursales'?<BranchManager {...{branches,setBranches,inventories,setInventories,branchId,setBranchId}}/>:active==='Proveedores'?<Suppliers suppliers={suppliers} setSuppliers={setSuppliers}/>:active==='Punto de Venta (POS)'?<Sales items={items} setItems={setItems} sales={sales} setSales={setSales} branch={branch}/>:active==='Usuarios y Accesos'?<UserManagement users={users} setUsers={setUsers} branches={branches}/>:active==='Reportes'?<AdminReports branches={branches} inventories={inventories} sales={sales}/>:<Alerts items={items} setItems={setItems} branch={branch}/>}</main></div>{modal&&<MedicineModal onClose={()=>setModal(false)} onSave={saveNew}/>}</div>
+function Alerts({ items, setItems, branch }) {
+  const alerts = items.filter((p) => p.stock <= p.min);
+  const restock = (p) => {
+    const qty = Number(
+      prompt(
+        `Cantidad a ingresar para ${p.name}:`,
+        Math.max(p.min * 2 - p.stock, 1),
+      ),
+    );
+    if (qty > 0)
+      setItems(
+        items.map((x) => (x.id === p.id ? { ...x, stock: x.stock + qty } : x)),
+      );
+  };
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">REABASTECIMIENTO</p>
+          <h1>Alertas</h1>
+          <p>
+            {alerts.length} alertas activas en {branch.name}.
+          </p>
+        </div>
+      </section>
+      <section className="alert-list">
+        {alerts.map((p) => {
+          const [label, tone] = getStatus(p);
+          return (
+            <article key={p.id}>
+              <span className={tone}>
+                <AlertTriangle />
+              </span>
+              <div>
+                <b>{p.name}</b>
+                <p>
+                  {p.sku} · {p.presentation} · {p.lab}
+                </p>
+              </div>
+              <div className="alert-stock">
+                <b>{p.stock}</b>
+                <small>Mínimo {p.min}</small>
+              </div>
+              <span className={`status ${tone}`}>{label}</span>
+              <button className="button primary" onClick={() => restock(p)}>
+                <RefreshCw />
+                Reabastecer
+              </button>
+            </article>
+          );
+        })}
+        {!alerts.length && (
+          <div className="empty page-empty">
+            <Bell />
+            <b>Inventario saludable</b>
+            <p>No existen medicamentos agotados o en nivel crítico.</p>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function UserManagement({ users, setUsers, branches }) {
+  const [form, setForm] = useState(null),
+    [showPassword, setShowPassword] = useState(false);
+  const save = (e) => {
+    e.preventDefault();
+    const payload = {
+      ...form,
+      branchIds:
+        form.role === "ADMIN" ? branches.map((b) => b.id) : [form.branchId],
+      active: form.active !== false,
+    };
+    delete payload.branchId;
+    if (form.id) setUsers(users.map((u) => (u.id === form.id ? payload : u)));
+    else setUsers([...users, { ...payload, id: Date.now() }]);
+    setForm(null);
+  };
+  const edit = (u) =>
+    setForm({ ...u, branchId: u.branchIds?.[0] || branches[0]?.id });
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">SEGURIDAD Y PERMISOS</p>
+          <h1>Usuarios y accesos</h1>
+          <p>Crea credenciales y asigna responsables a cada farmacia.</p>
+        </div>
+        <button
+          className="button primary"
+          onClick={() =>
+            setForm({
+              name: "",
+              email: "",
+              password: "",
+              role: "INVENTARIO",
+              branchId: branches[0]?.id,
+              active: true,
+            })
+          }
+        >
+          <Plus />
+          Nuevo usuario
+        </button>
+      </section>
+      <section className="table-card user-table">
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Sucursales autorizadas</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    <div className="medicine">
+                      <span>
+                        <Users />
+                      </span>
+                      <div>
+                        <b>{u.name}</b>
+                        <small>{u.email}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="lab-badge">
+                      {u.role === "ADMIN"
+                        ? "Administrador"
+                        : "Encargado de inventario"}
+                    </span>
+                  </td>
+                  <td>
+                    {u.role === "ADMIN"
+                      ? "Todas las sucursales"
+                      : u.branchIds
+                          .map((id) => branches.find((b) => b.id === id)?.name)
+                          .filter(Boolean)
+                          .join(", ")}
+                  </td>
+                  <td>
+                    <span
+                      className={`status ${u.active ? "success" : "danger"}`}
+                    >
+                      {u.active ? "Activo" : "Inactivo"}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="row-actions">
+                      <button title="Editar" onClick={() => edit(u)}>
+                        <Edit3 />
+                      </button>
+                      {u.role !== "ADMIN" && (
+                        <button
+                          title="Eliminar"
+                          className="delete"
+                          onClick={() =>
+                            confirm(`¿Eliminar el acceso de ${u.name}?`) &&
+                            setUsers(users.filter((x) => x.id !== u.id))
+                          }
+                        >
+                          <Trash2 />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {form && (
+        <SimpleModal
+          title={form.id ? "Editar credenciales" : "Crear credenciales"}
+          onClose={() => setForm(null)}
+        >
+          <form className="simple-form" onSubmit={save}>
+            <div className="form-grid">
+              <label>
+                Nombre completo
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                Correo de acceso
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                Contraseña temporal
+                <div className="password-field">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={(e) =>
+                      setForm({ ...form, password: e.target.value })
+                    }
+                    minLength="8"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff /> : <Eye />}
+                  </button>
+                </div>
+              </label>
+              <label>
+                Rol
+                <select
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                >
+                  <option value="INVENTARIO">Encargado de inventario</option>
+                  <option value="ADMIN">Administrador</option>
+                </select>
+              </label>
+              {form.role !== "ADMIN" && (
+                <label className="wide">
+                  Sucursal asignada
+                  <select
+                    value={form.branchId}
+                    onChange={(e) =>
+                      setForm({ ...form, branchId: e.target.value })
+                    }
+                  >
+                    {branches
+                      .filter((b) => b.active !== false)
+                      .map((b) => (
+                        <option value={b.id} key={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
+            </div>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={form.active !== false}
+                onChange={(e) => setForm({ ...form, active: e.target.checked })}
+              />{" "}
+              Usuario activo
+            </label>
+            <div className="credential-note">
+              El encargado utilizará este correo y contraseña para ingresar.
+              Solo tendrá acceso operativo a la sucursal asignada.
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setForm(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary">Guardar credenciales</button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
+    </>
+  );
+}
+
+function Reports({ items, sales, branch }) {
+  const rows = sales.filter((s) => s.branchId === branch.id);
+  const download = (name, data) => {
+    const csv = data
+        .map((r) =>
+          r.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","),
+        )
+        .join("\n"),
+      a = document.createElement("a");
+    a.href = URL.createObjectURL(
+      new Blob(["\ufeff" + csv], { type: "text/csv" }),
+    );
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">ANÁLISIS OPERATIVO</p>
+          <h1>Reportes</h1>
+          <p>Indicadores y exportaciones de {branch.name}.</p>
+        </div>
+      </section>
+      <div className="kpi-grid">
+        {[
+          ["Productos", items.length],
+          ["Unidades", items.reduce((s, p) => s + p.stock, 0)],
+          ["Stock crítico", items.filter((p) => p.stock <= p.min).length],
+          ["Ventas", money(rows.reduce((s, v) => s + v.total, 0))],
+        ].map(([label, value]) => (
+          <article className="kpi" key={label}>
+            <span className="kpi-icon">
+              <BarChart3 />
+            </span>
+            <div>
+              <small>{label}</small>
+              <b>{value}</b>
+              <p>Sucursal seleccionada</p>
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="report-grid">
+        <article className="panel">
+          <Package />
+          <h3>Inventario completo</h3>
+          <p>Existencias, categorías, precios y laboratorios.</p>
+          <button
+            className="button secondary"
+            onClick={() =>
+              download("inventario.csv", [
+                [
+                  "SKU",
+                  "Medicamento",
+                  "Categoría",
+                  "Laboratorio",
+                  "Stock",
+                  "Mínimo",
+                  "Precio venta",
+                ],
+                ...items.map((p) => [
+                  p.sku,
+                  p.name,
+                  p.category,
+                  p.lab,
+                  p.stock,
+                  p.min,
+                  p.sellPrice,
+                ]),
+              ])
+            }
+          >
+            Descargar CSV
+          </button>
+        </article>
+        <article className="panel">
+          <AlertTriangle />
+          <h3>Stock crítico</h3>
+          <p>Medicamentos agotados o bajo el mínimo.</p>
+          <button
+            className="button secondary"
+            onClick={() =>
+              download("stock-critico.csv", [
+                ["SKU", "Medicamento", "Stock", "Mínimo"],
+                ...items
+                  .filter((p) => p.stock <= p.min)
+                  .map((p) => [p.sku, p.name, p.stock, p.min]),
+              ])
+            }
+          >
+            Descargar CSV
+          </button>
+        </article>
+        <article className="panel">
+          <ShoppingCart />
+          <h3>Historial de ventas</h3>
+          <p>Ventas realizadas en la sucursal seleccionada.</p>
+          <button
+            className="button secondary"
+            onClick={() =>
+              download("ventas.csv", [
+                ["Fecha", "Medicamento", "Cliente", "Cantidad", "Total"],
+                ...rows.map((v) => [
+                  v.date,
+                  v.product,
+                  v.customer,
+                  v.qty,
+                  v.total,
+                ]),
+              ])
+            }
+          >
+            Descargar CSV
+          </button>
+        </article>
+      </div>
+    </>
+  );
+}
+
+function AdminReports({ branches, inventories, sales, onNotify }) {
+  const [selected, setSelected] = useState("ALL"),
+    [confirmExport, setConfirmExport] = useState(false),
+    [exporting, setExporting] = useState(false),
+    branch = branches.find((b) => b.id === selected),
+    items =
+      selected === "ALL"
+        ? Object.values(inventories).flat()
+        : inventories[selected] || [],
+    rows =
+      selected === "ALL" ? sales : sales.filter((s) => s.branchId === selected),
+    label = selected === "ALL" ? "Todas las farmacias" : branch?.name;
+  const downloadReport = async () => {
+    setExporting(true);
+    try {
+      await exportExcel({
+        filename: `reporte-farmacias-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        sheetName: "Resumen",
+        columns: [
+          { header: "Farmacia", key: "farmacia", width: 28 },
+          { header: "Medicamentos", key: "medicamentos", width: 16 },
+          { header: "Unidades", key: "unidades", width: 14 },
+          { header: "Stock crítico", key: "criticos", width: 16 },
+          { header: "Ventas", key: "ventas", width: 18 },
+        ],
+        rows: branches
+          .filter((b) => selected === "ALL" || b.id === selected)
+          .map((b) => {
+            const inventory = inventories[b.id] || [],
+              branchSales = sales.filter((s) => s.branchId === b.id);
+            return {
+              farmacia: b.name,
+              medicamentos: inventory.length,
+              unidades: inventory.reduce((sum, p) => sum + p.stock, 0),
+              criticos: inventory.filter((p) => p.stock <= p.min).length,
+              ventas: branchSales.reduce((sum, sale) => sum + sale.total, 0),
+            };
+          }),
+      });
+      setConfirmExport(false);
+      onNotify("El reporte Excel se descargó correctamente.");
+    } finally {
+      setExporting(false);
+    }
+  };
+  return (
+    <>
+      <section className="page-heading report-heading">
+        <div>
+          <p className="eyebrow">VISIÓN ADMINISTRATIVA</p>
+          <h1>Reportes por farmacia</h1>
+          <p>Compara el desempeño consolidado o revisa una sucursal.</p>
+        </div>
+        <select
+          className="branch-select"
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+        >
+          <option value="ALL">Todas las farmacias</option>
+          {branches.map((b) => (
+            <option value={b.id} key={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        <button
+          className="button primary report-download"
+          onClick={() => setConfirmExport(true)}
+        >
+          <Download />
+          Descargar Excel
+        </button>
+      </section>
+      <div className="kpi-grid">
+        {[
+          ["Medicamentos", items.length],
+          ["Unidades disponibles", items.reduce((s, p) => s + p.stock, 0)],
+          ["Alertas críticas", items.filter((p) => p.stock <= p.min).length],
+          ["Ventas acumuladas", money(rows.reduce((s, v) => s + v.total, 0))],
+        ].map(([name, value]) => (
+          <article className="kpi" key={name}>
+            <span className="kpi-icon">
+              <BarChart3 />
+            </span>
+            <div>
+              <small>{name}</small>
+              <b>{value}</b>
+              <p>{label}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+      <section className="table-card branch-report">
+        <table>
+          <thead>
+            <tr>
+              <th>Farmacia</th>
+              <th>Medicamentos</th>
+              <th>Unidades</th>
+              <th>Stock crítico</th>
+              <th>Ventas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {branches
+              .filter((b) => selected === "ALL" || b.id === selected)
+              .map((b) => {
+                const inv = inventories[b.id] || [],
+                  branchSales = sales.filter((s) => s.branchId === b.id);
+                return (
+                  <tr key={b.id}>
+                    <td>
+                      <b>{b.name}</b>
+                      <small>{b.address}</small>
+                    </td>
+                    <td>{inv.length}</td>
+                    <td>{inv.reduce((s, p) => s + p.stock, 0)}</td>
+                    <td>
+                      <span
+                        className={`status ${inv.some((p) => p.stock <= p.min) ? "warning" : "success"}`}
+                      >
+                        {inv.filter((p) => p.stock <= p.min).length}
+                      </span>
+                    </td>
+                    <td>
+                      <b>
+                        {money(branchSales.reduce((s, v) => s + v.total, 0))}
+                      </b>
+                    </td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </section>
+      {confirmExport && (
+        <ConfirmDialog
+          icon={FileSpreadsheet}
+          eyebrow="EXPORTAR REPORTE"
+          title="¿Descargar reporte en Excel?"
+          message={`Se generará un archivo .xlsx con el resumen de ${label.toLowerCase()} y los datos visibles actualmente.`}
+          confirmLabel="Sí, descargar"
+          busy={exporting}
+          onClose={() => setConfirmExport(false)}
+          onConfirm={downloadReport}
+        />
+      )}
+    </>
+  );
+}
+
+export default function AppV2() {
+  const [currentUser, setCurrentUser] = useState(() =>
+      JSON.parse(localStorage.getItem("pharma-current-user") || "null"),
+    ),
+    [users, setUsers] = useState(
+      () =>
+        JSON.parse(localStorage.getItem("pharma-users") || "null") ||
+        defaultUsers,
+    ),
+    [branches, setBranches] = useState(
+      () =>
+        JSON.parse(localStorage.getItem("pharma-branches") || "null") ||
+        defaultBranches,
+    ),
+    [branchId, setBranchId] = useState(
+      () => localStorage.getItem("pharma-branch") || "central",
+    ),
+    [inventories, setInventories] = useState(loadInventories),
+    [suppliers, setSuppliers] = useState(
+      () =>
+        JSON.parse(localStorage.getItem("pharma-suppliers") || "null") ||
+        defaultSuppliers,
+    ),
+    [sales, setSales] = useState(
+      () => JSON.parse(localStorage.getItem("pharma-sales") || "null") || [],
+    ),
+    [active, setActive] = useState("Dashboard"),
+    [sidebar, setSidebar] = useState(false),
+    [modal, setModal] = useState(false),
+    [logoutDialog, setLogoutDialog] = useState(false),
+    [toast, setToast] = useState(""),
+    [globalQuery, setGlobalQuery] = useState("");
+  const searchRef = useRef(null);
+  useEffect(
+    () =>
+      localStorage.setItem("pharma-inventories", JSON.stringify(inventories)),
+    [inventories],
+  );
+  useEffect(
+    () => localStorage.setItem("pharma-branches", JSON.stringify(branches)),
+    [branches],
+  );
+  useEffect(
+    () => localStorage.setItem("pharma-suppliers", JSON.stringify(suppliers)),
+    [suppliers],
+  );
+  useEffect(
+    () => localStorage.setItem("pharma-sales", JSON.stringify(sales)),
+    [sales],
+  );
+  useEffect(
+    () => localStorage.setItem("pharma-users", JSON.stringify(users)),
+    [users],
+  );
+  useEffect(() => localStorage.setItem("pharma-branch", branchId), [branchId]);
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(""), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+  useEffect(() => {
+    const shortcut = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, []);
+  if (!currentUser)
+    return (
+      <CredentialLogin
+        onLogin={(user) => {
+          const firstBranch =
+            user.role === "ADMIN" ? branches[0]?.id : user.branchIds[0];
+          setBranchId(firstBranch);
+          localStorage.setItem("pharma-current-user", JSON.stringify(user));
+          setCurrentUser(user);
+        }}
+      />
+    );
+  const items = inventories[branchId] || [],
+    setItems = (next) => setInventories({ ...inventories, [branchId]: next }),
+    branch = branches.find((b) => b.id === branchId);
+  const saveNew = (m) => {
+    setItems([...items, { ...m, id: Date.now() }]);
+    setModal(false);
+    setActive("Inventario");
+  };
+  return (
+    <div className="app">
+      <Sidebar
+        active={active}
+        setActive={setActive}
+        open={sidebar}
+        setOpen={setSidebar}
+        user={currentUser}
+      />
+      <div className="workspace">
+        <header className="topbar">
+          <button className="menu-button" onClick={() => setSidebar(true)}>
+            <Menu />
+          </button>
+          <select
+            className="branch-select"
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+          >
+            {branches
+              .filter(
+                (b) =>
+                  b.active !== false &&
+                  (currentUser.role === "ADMIN" ||
+                    currentUser.branchIds.includes(b.id)),
+              )
+              .map((b) => (
+                <option value={b.id} key={b.id}>
+                  {b.name}
+                </option>
+              ))}
+          </select>
+          <div className="global-search">
+            <Search />
+            <input
+              ref={searchRef}
+              value={globalQuery}
+              onChange={(e) => setGlobalQuery(e.target.value)}
+              placeholder="Buscar medicamento, SKU o código de barras… (Ctrl+K)"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") setActive("Inventario");
+              }}
+            />
+          </div>
+          <button className="top-alert" onClick={() => setActive("Alertas")}>
+            <Bell />
+            <i>{items.filter((p) => p.stock <= p.min).length}</i>
+          </button>
+          <button
+            className="button primary new-med"
+            onClick={() => setModal(true)}
+          >
+            <Plus />
+            Nuevo Medicamento
+          </button>
+          <button className="profile" onClick={() => setLogoutDialog(true)}>
+            <img
+              src="https://lh3.googleusercontent.com/a/default-user=s96-c"
+              alt="Avatar de usuario"
+            />
+            <span>
+              <b>{currentUser.name}</b>
+              <small>
+                {currentUser.role === "ADMIN"
+                  ? "Administrador"
+                  : "Encargado de inventario"}
+              </small>
+            </span>
+            <ChevronDown />
+          </button>
+        </header>
+        <main className="content">
+          {active === "Dashboard" ? (
+            <Dashboard
+              items={items}
+              branch={branch}
+              onInventory={() => setActive("Inventario")}
+            />
+          ) : active === "Inventario" ? (
+            <Inventory
+              items={items}
+              setItems={setItems}
+              branchId={branchId}
+              initialQuery={globalQuery}
+              onAdd={() => setModal(true)}
+            />
+          ) : active === "Sucursales" ? (
+            <BranchManager
+              {...{
+                branches,
+                setBranches,
+                inventories,
+                setInventories,
+                branchId,
+                setBranchId,
+              }}
+            />
+          ) : active === "Proveedores" ? (
+            <Suppliers suppliers={suppliers} setSuppliers={setSuppliers} />
+          ) : active === "Punto de Venta (POS)" ? (
+            <Sales
+              items={items}
+              setItems={setItems}
+              sales={sales}
+              setSales={setSales}
+              branch={branch}
+            />
+          ) : active === "Usuarios y Accesos" ? (
+            <UserManagement
+              users={users}
+              setUsers={setUsers}
+              branches={branches}
+            />
+          ) : active === "Reportes" ? (
+            <AdminReports
+              branches={branches}
+              inventories={inventories}
+              sales={sales}
+              onNotify={setToast}
+            />
+          ) : (
+            <Alerts items={items} setItems={setItems} branch={branch} />
+          )}
+        </main>
+      </div>
+      {modal && (
+        <MedicineModal onClose={() => setModal(false)} onSave={saveNew} />
+      )}
+      {logoutDialog && (
+        <ConfirmDialog
+          icon={LogOut}
+          eyebrow="SESIÓN ACTIVA"
+          title="¿Quieres cerrar sesión?"
+          message="Tu información guardada permanecerá disponible. Tendrás que ingresar nuevamente para continuar trabajando."
+          confirmLabel="Cerrar sesión"
+          tone="danger"
+          onClose={() => setLogoutDialog(false)}
+          onConfirm={() => {
+            localStorage.removeItem("pharma-current-user");
+            setLogoutDialog(false);
+            setCurrentUser(null);
+          }}
+        />
+      )}
+      {toast && <SuccessToast message={toast} />}
+    </div>
+  );
 }
