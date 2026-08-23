@@ -1559,6 +1559,7 @@ function Purchases({ branch, items, suppliers }) {
   const [purchases, setPurchases] = useState([]),
     [form, setForm] = useState(null),
     [receiving, setReceiving] = useState(null),
+    [supplierReturn, setSupplierReturn] = useState(null),
     [busy, setBusy] = useState(false);
   const [askConfirm, actionDialog] = useActionConfirmation();
   const load = async () => {
@@ -1624,6 +1625,7 @@ function Purchases({ branch, items, suppliers }) {
     if(!await askConfirm({icon:Trash2,tone:"danger",eyebrow:"ANULAR ORDEN",title:`¿Anular ${purchase.number}?`,message:"Se cancelará el saldo pendiente. Las recepciones ya realizadas conservarán su trazabilidad.",confirmLabel:"Anular orden"}))return;
     const response=await fetch(`/api/v1/purchases/${purchase.id}/cancel/`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()},body:JSON.stringify({reason})});const data=await response.json();if(!response.ok)return alert(data.detail);setPurchases(purchases.map(x=>x.id===data.id?data:x));
   };
+  const returnSupplier = async(event)=>{event.preventDefault();if(!await askConfirm({icon:Truck,tone:"danger",eyebrow:"DEVOLUCIÓN A PROVEEDOR",title:"¿Confirmar salida del lote?",message:"Las unidades saldrán del inventario y quedarán registradas contra la compra original.",confirmLabel:"Devolver"}))return;setBusy(true);const response=await fetch(`/api/v1/purchases/${supplierReturn.purchase.id}/return/`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()},body:JSON.stringify({lotId:supplierReturn.lotId,quantity:supplierReturn.quantity,reason:supplierReturn.reason})});const data=await response.json();setBusy(false);if(!response.ok)return alert(data.detail);setSupplierReturn(null);};
   return (
     <>
       <section className="page-heading">
@@ -1675,7 +1677,7 @@ function Purchases({ branch, items, suppliers }) {
                   <td>
                     <span className="status success">{purchase.status}</span>
                   </td>
-                  <td><div className="row-actions">{!["RECIBIDA","ANULADA"].includes(purchase.status)&&<button title="Recibir" onClick={()=>{const detail=purchase.items.find(x=>x.received<x.ordered);setReceiving({purchase,detailId:detail?.id,quantity:detail?detail.ordered-detail.received:1,lot:"",expires:""});}}><Package/></button>}{!["RECIBIDA","ANULADA"].includes(purchase.status)&&<button className="delete" title="Anular" onClick={()=>cancelPurchase(purchase)}><Trash2/></button>}</div></td>
+                  <td><div className="row-actions">{!["RECIBIDA","ANULADA"].includes(purchase.status)&&<button title="Recibir" onClick={()=>{const detail=purchase.items.find(x=>x.received<x.ordered);setReceiving({purchase,detailId:detail?.id,quantity:detail?detail.ordered-detail.received:1,lot:"",expires:""});}}><Package/></button>}{purchase.receipts?.length>0&&<button title="Devolver al proveedor" onClick={()=>setSupplierReturn({purchase,lotId:purchase.receipts[0].lotId,quantity:1,reason:""})}><Truck/></button>}{!["RECIBIDA","ANULADA"].includes(purchase.status)&&<button className="delete" title="Anular" onClick={()=>cancelPurchase(purchase)}><Trash2/></button>}</div></td>
                 </tr>
               ))}
             </tbody>
@@ -1766,6 +1768,7 @@ function Purchases({ branch, items, suppliers }) {
         </SimpleModal>
       )}
       {receiving && <SimpleModal title={`Recibir ${receiving.purchase.number}`} onClose={()=>setReceiving(null)}><form className="simple-form" onSubmit={receive}><div className="form-grid"><label>Producto<select value={receiving.detailId} onChange={e=>setReceiving({...receiving,detailId:e.target.value})}>{receiving.purchase.items.filter(x=>x.received<x.ordered).map(x=><option value={x.id} key={x.id}>{x.product} · pendiente {x.ordered-x.received}</option>)}</select></label><label>Cantidad<input type="number" min="1" required value={receiving.quantity} onChange={e=>setReceiving({...receiving,quantity:e.target.value})}/></label><label>Número de lote<input required value={receiving.lot} onChange={e=>setReceiving({...receiving,lot:e.target.value})}/></label><label>Vencimiento<input type="date" required value={receiving.expires} onChange={e=>setReceiving({...receiving,expires:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setReceiving(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Recibiendo…":"Confirmar recepción"}</button></footer></form></SimpleModal>}
+      {supplierReturn&&<SimpleModal title="Devolución al proveedor" onClose={()=>setSupplierReturn(null)}><form className="simple-form" onSubmit={returnSupplier}><div className="form-grid"><label>Lote<select value={supplierReturn.lotId} onChange={e=>setSupplierReturn({...supplierReturn,lotId:e.target.value})}>{supplierReturn.purchase.receipts.map(x=><option key={x.lotId} value={x.lotId}>{x.product} · {x.lot}</option>)}</select></label><label>Cantidad<input type="number" min="1" required value={supplierReturn.quantity} onChange={e=>setSupplierReturn({...supplierReturn,quantity:e.target.value})}/></label><label className="wide">Motivo<input required value={supplierReturn.reason} onChange={e=>setSupplierReturn({...supplierReturn,reason:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setSupplierReturn(null)}>Cancelar</button><button className="button primary" disabled={busy}>Continuar</button></footer></form></SimpleModal>}
       {actionDialog}
     </>
   );
@@ -1931,7 +1934,9 @@ function Suppliers({ suppliers, setSuppliers }) {
 
 function Sales({ items, setItems, sales, setSales, branch }) {
   const [form, setForm] = useState(null),
+    [adjustment, setAdjustment] = useState(null),
     [saving, setSaving] = useState(false);
+  const [askConfirm, adjustmentDialog] = useActionConfirmation();
   const total = form
     ? Number(form.qty || 0) *
       (items.find((p) => p.id === Number(form.productId))?.sellPrice || 0)
@@ -1978,6 +1983,12 @@ function Sales({ items, setItems, sales, setSales, branch }) {
     } finally {
       setSaving(false);
     }
+  };
+  const submitAdjustment = async (event) => {
+    event.preventDefault();
+    const isReturn=adjustment.kind==="return";
+    if(!await askConfirm({icon:isReturn?RefreshCw:Trash2,tone:isReturn?"primary":"danger",eyebrow:isReturn?"DEVOLUCIÓN Y NOTA DE CRÉDITO":"ANULAR VENTA",title:isReturn?"¿Confirmar devolución?":"¿Anular esta venta?",message:isReturn?"Se repondrá el lote original y se generará una nota de crédito.":"Se revertirá todo el inventario consumido y el movimiento de caja.",confirmLabel:isReturn?"Devolver":"Anular venta"}))return;
+    setSaving(true);const response=await fetch(`/api/v1/sales/${adjustment.sale.id}/${isReturn?"return":"cancel"}/`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()},body:JSON.stringify({quantity:adjustment.quantity,reason:adjustment.reason})});const data=await response.json();setSaving(false);if(!response.ok)return alert(data.detail);setItems(items.map(x=>x.id===Number(adjustment.sale.productId||items.find(p=>p.sku===adjustment.sale.sku)?.id)?{...x,stock:data.stock}:x));if(!isReturn)setSales(sales.map(x=>x.id===adjustment.sale.id?{...x,cancelled:true}:x));setAdjustment(null);
   };
   const rows = sales.filter((s) => s.branchId === branch.id);
   return (
@@ -2032,6 +2043,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
                 <th>Cantidad</th>
                 <th>Total</th>
                 <th>Pago</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -2048,6 +2060,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
                     <b>{money(s.total)}</b>
                   </td>
                   <td>{s.payment || "No registrado"}</td>
+                  <td><div className="row-actions">{!s.cancelled&&<button title="Devolver" onClick={()=>setAdjustment({kind:"return",sale:s,quantity:1,reason:""})}><RefreshCw/></button>}{!s.cancelled&&<button className="delete" title="Anular" onClick={()=>setAdjustment({kind:"cancel",sale:s,reason:""})}><Trash2/></button>}</div></td>
                 </tr>
               ))}
             </tbody>
@@ -2129,6 +2142,8 @@ function Sales({ items, setItems, sales, setSales, branch }) {
           </form>
         </SimpleModal>
       )}
+      {adjustment&&<SimpleModal title={adjustment.kind==="return"?"Devolución de cliente":"Anular venta"} onClose={()=>setAdjustment(null)}><form className="simple-form" onSubmit={submitAdjustment}><div className="form-grid">{adjustment.kind==="return"&&<label>Cantidad<input type="number" min="1" max={adjustment.sale.qty} required value={adjustment.quantity} onChange={e=>setAdjustment({...adjustment,quantity:e.target.value})}/></label>}<label className="wide">Motivo<input required value={adjustment.reason} onChange={e=>setAdjustment({...adjustment,reason:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setAdjustment(null)}>Cancelar</button><button className="button primary" disabled={saving}>Continuar</button></footer></form></SimpleModal>}
+      {adjustmentDialog}
     </>
   );
 }

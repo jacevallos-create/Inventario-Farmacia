@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from apps.farmacias.models import Farmacia, UsuarioFarmacia
 from apps.auditoria.models import AuditLog
 from apps.lotes.models import Lote
-from apps.ventas.models import VentaLote
+from apps.ventas.models import NotaCredito, VentaLote
 from apps.inventario.models import InventarioFarmacia, MovimientoInventario
 from apps.proveedores.models import Proveedor
 
@@ -96,6 +96,11 @@ class SmokeTests(TestCase):
         self.assertEqual(lot.cantidad_disponible, 7)
         self.assertEqual(VentaLote.objects.get().cantidad, 3)
         self.assertTrue(AuditLog.objects.filter(entidad="venta", usuario=self.user).exists())
+        returned = self.client.post(f"/api/v1/sales/{response.json()['sale']['id']}/return/", {"quantity": 1, "reason": "Producto devuelto"}, content_type="application/json")
+        self.assertEqual(returned.status_code, 201, returned.json())
+        self.assertTrue(NotaCredito.objects.filter(numero=returned.json()["creditNote"]).exists())
+        lot.refresh_from_db()
+        self.assertEqual(lot.cantidad_disponible, 8)
 
     def test_excel_report_is_generated_from_database(self):
         self.user.is_staff = True

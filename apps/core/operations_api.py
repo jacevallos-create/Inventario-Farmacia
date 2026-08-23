@@ -17,7 +17,7 @@ from apps.cajas.models import MovimientoCaja, SesionCaja
 from apps.farmacias.models import Farmacia
 from apps.inventario.models import InventarioFarmacia, MovimientoInventario
 from apps.lotes.models import Lote
-from apps.ventas.models import Venta, VentaLote
+from apps.ventas.models import DevolucionVenta, DevolucionVentaLote, NotaCredito, Venta, VentaLote
 
 
 def audit(request, action, entity, instance, description, pharmacy=None, changes=None):
@@ -136,6 +136,43 @@ class SaleCancelView(APIView):
         sale.anulada=True; sale.anulada_por=request.user; sale.anulada_en=timezone.now(); sale.motivo_anulacion=reason; sale.save()
         audit(request, AuditLog.Accion.MODIFICAR, "venta", sale, f"Venta {sale.referencia_cliente} anulada", sale.farmacia, {"motivo": reason, "stock_anterior": previous, "stock_nuevo": inventory.stock_actual})
         return Response({"id": sale.referencia_cliente, "cancelled": True, "stock": inventory.stock_actual})
+
+
+class CustomerReturnView(APIView):
+    permission_classes = [IsAuthenticated]
+    @transaction.atomic
+    def post(self, request, sale_id):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"detail": "La devolución requiere autorización administrativa."}, status=403)
+        sale = Venta.objects.select_for_update().select_related("farmacia", "medicamento", "sesion_caja").filter(referencia_cliente=sale_id, anulada=False).first()
+        reason = str(request.data.get("reason") or "").strip()
+        try: quantity = int(request.data.get("quantity", 0))
+        except (TypeError, ValueError): quantity = 0
+        returned = sum(x.cantidad for x in sale.devoluciones.all()) if sale else 0
+        if not sale or not reason or quantity < 1 or quantity > sale.cantidad - returned:
+            return Response({"detail": "Cantidad no disponible o motivo obligatorio ausente."}, status=409)
+        refund = sale.precio_unitario * quantity
+        returned_record = DevolucionVenta.objects.create(venta=sale, usuario=request.user, cantidad=quantity, motivo=reason, autorizada_por=request.user, total_devuelto=refund)
+        inventory = InventarioFarmacia.objects.select_for_update().get(farmacia=sale.farmacia, medicamento=sale.medicamento)
+        remaining = quantity
+        previous_returns = {}
+        for item in DevolucionVentaLote.objects.filter(devolucion__venta=sale).values("lote_id").annotate(total=Sum("cantidad")):
+            previous_returns[item["lote_id"]] = item["total"]
+        for sold in sale.lotes_consumidos.select_related("lote").order_by("lote__fecha_vencimiento"):
+            available = sold.cantidad - previous_returns.get(sold.lote_id, 0)
+            restored = min(remaining, available)
+            if restored <= 0: continue
+            lot = Lote.objects.select_for_update().get(pk=sold.lote_id); lot.cantidad_disponible += restored; lot.save()
+            DevolucionVentaLote.objects.create(devolucion=returned_record, lote=lot, cantidad=restored)
+            MovimientoInventario.objects.create(farmacia=sale.farmacia, medicamento=sale.medicamento, lote=lot, tipo="ENTRADA", concepto="DEVOLUCION_CLIENTE", cantidad=restored, saldo_anterior=inventory.stock_actual, saldo_nuevo=inventory.stock_actual+restored, costo_unitario=lot.costo_unitario, documento_tipo="DEVOLUCION", documento_id=returned_record.id, usuario=request.user, observacion=reason)
+            inventory.stock_actual += restored; remaining -= restored
+            if not remaining: break
+        inventory.save()
+        note = NotaCredito.objects.create(devolucion=returned_record, numero=f"NC-{uuid4().hex[:12].upper()}", motivo=reason, total=refund)
+        if sale.sesion_caja and not sale.sesion_caja.cerrada_en:
+            MovimientoCaja.objects.create(sesion=sale.sesion_caja, tipo="DEVOLUCION", forma_pago=sale.forma_pago, monto=refund, referencia=note.numero, usuario=request.user, observacion=reason)
+        audit(request, AuditLog.Accion.CREAR, "devolucion_cliente", returned_record, f"Devolución de venta {sale.referencia_cliente}", sale.farmacia, {"cantidad": quantity, "nota_credito": note.numero})
+        return Response({"id": returned_record.id, "saleId": sale.referencia_cliente, "quantity": quantity, "total": float(refund), "creditNote": note.numero, "stock": inventory.stock_actual}, status=201)
 
 
 class LotAlertsView(APIView):

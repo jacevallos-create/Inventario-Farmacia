@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.auditoria.models import AuditLog
-from apps.compras.models import Compra, CompraDetalle
+from apps.compras.models import Compra, CompraDetalle, DevolucionProveedor, DevolucionProveedorDetalle
 from apps.cajas.models import Caja, MovimientoCaja, SesionCaja
 from apps.farmacias.models import Farmacia
 from apps.inventario.models import InventarioFarmacia, MovimientoInventario
@@ -52,7 +52,7 @@ def serialize_purchase(purchase):
             "product": item.medicamento.nombre_comercial, "ordered": item.cantidad_solicitada,
             "received": item.cantidad_recibida, "cost": float(item.costo_unitario),
         } for item in purchase.detalles.select_related("medicamento")],
-        "receipts": [{"date": timezone.localtime(move.creado_en).isoformat(), "sku": move.medicamento.codigo_interno, "product": move.medicamento.nombre_comercial, "lot": move.lote.numero if move.lote else "", "quantity": move.cantidad, "user": move.usuario.email} for move in MovimientoInventario.objects.filter(documento_tipo="COMPRA", documento_id=purchase.id).select_related("medicamento", "lote", "usuario")],
+        "receipts": [{"date": timezone.localtime(move.creado_en).isoformat(), "sku": move.medicamento.codigo_interno, "product": move.medicamento.nombre_comercial, "lotId": move.lote_id, "lot": move.lote.numero if move.lote else "", "quantity": move.cantidad, "user": move.usuario.email} for move in MovimientoInventario.objects.filter(documento_tipo="COMPRA", documento_id=purchase.id).select_related("medicamento", "lote", "usuario")],
     }
 
 
@@ -162,6 +162,28 @@ class PurchaseCancelView(APIView):
         purchase.estado = Compra.Estado.ANULADA; purchase.observacion = f"{purchase.observacion}\nANULADA: {reason}".strip(); purchase.save()
         audit(request, AuditLog.Accion.MODIFICAR, "compra", purchase, f"Orden {purchase.numero} anulada", purchase.farmacia, {"motivo": reason})
         return Response(serialize_purchase(purchase))
+
+
+class SupplierReturnView(APIView):
+    permission_classes = [IsAuthenticated]
+    @transaction.atomic
+    def post(self, request, purchase_id):
+        if not admin_user(request.user): return Response({"detail": "La devolución requiere autorización administrativa."}, status=403)
+        purchase = Compra.objects.select_related("farmacia", "proveedor").filter(pk=purchase_id).first()
+        lot = Lote.objects.select_for_update().select_related("medicamento").filter(pk=request.data.get("lotId"), farmacia=purchase.farmacia if purchase else None).first()
+        reason = str(request.data.get("reason") or "").strip()
+        try: quantity = int(request.data.get("quantity", 0))
+        except (TypeError, ValueError): quantity = 0
+        if not purchase or not lot or not reason or quantity < 1 or quantity > lot.cantidad_disponible:
+            return Response({"detail": "Compra, lote, cantidad o motivo inválido."}, status=409)
+        returned = DevolucionProveedor.objects.create(compra=purchase, usuario=request.user, autorizada_por=request.user, motivo=reason, total=lot.costo_unitario*quantity)
+        DevolucionProveedorDetalle.objects.create(devolucion=returned, lote=lot, cantidad=quantity, costo_unitario=lot.costo_unitario)
+        inventory = InventarioFarmacia.objects.select_for_update().get(farmacia=purchase.farmacia, medicamento=lot.medicamento)
+        if inventory.stock_actual < quantity: return Response({"detail": "El inventario no permite esta devolución."}, status=409)
+        previous=inventory.stock_actual; lot.cantidad_disponible-=quantity; inventory.stock_actual-=quantity; lot.save(); inventory.save()
+        MovimientoInventario.objects.create(farmacia=purchase.farmacia, medicamento=lot.medicamento, lote=lot, tipo="SALIDA", concepto="DEVOLUCION_PROVEEDOR", cantidad=quantity, saldo_anterior=previous, saldo_nuevo=inventory.stock_actual, costo_unitario=lot.costo_unitario, documento_tipo="DEVOLUCION_PROVEEDOR", documento_id=returned.id, usuario=request.user, observacion=reason)
+        audit(request, AuditLog.Accion.CREAR, "devolucion_proveedor", returned, f"Devolución al proveedor {purchase.proveedor.razon_social}", purchase.farmacia, {"lote":lot.numero,"cantidad":quantity})
+        return Response({"id":returned.id,"lot":lot.numero,"quantity":quantity,"total":float(returned.total),"stock":inventory.stock_actual},status=201)
 
 
 def serialize_transfer(row):

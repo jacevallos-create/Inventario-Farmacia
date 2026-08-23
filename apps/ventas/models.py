@@ -67,3 +67,12 @@ class ComprobanteElectronico(TimeStampedModel):
     numero_autorizacion = models.CharField(max_length=64, blank=True)
     autorizado_en = models.DateTimeField(null=True, blank=True)
     mensajes_sri = models.JSONField(default=list, blank=True)
+
+
+class NotaCredito(TimeStampedModel):
+    devolucion = models.OneToOneField(DevolucionVenta, on_delete=models.PROTECT, related_name="nota_credito")
+    numero = models.CharField(max_length=30, unique=True)
+    motivo = models.CharField(max_length=255)
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+    estado = models.CharField(max_length=15, choices=[("GENERADA", "Generada"), ("AUTORIZADA", "Autorizada"), ("ANULADA", "Anulada")], default="GENERADA")
+    clave_acceso = models.CharField(max_length=49, blank=True)
