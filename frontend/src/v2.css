@@ -266,9 +266,17 @@ select:focus {
   flex-wrap: wrap;
 }
 .report-heading > select,
-.report-heading > input { flex: 1 1 155px; min-width: 0; }
-.table-scroll { overflow-x: auto; max-width: 100%; }
-.table-scroll table { min-width: 720px; }
+.report-heading > input {
+  flex: 1 1 155px;
+  min-width: 0;
+}
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.table-scroll table {
+  min-width: 720px;
+}
 .page-heading h1 {
   font: 800 28px Manrope;
   margin: 3px 0 5px;
@@ -1045,8 +1053,18 @@ td small {
 .wide {
   grid-column: 1/-1;
 }
-.branch-assignment { border: 1px solid #dce3ee; border-radius: 12px; padding: 14px; display: grid; gap: 8px; }
-.branch-assignment legend { padding: 0 6px; font-weight: 700; color: #44536a; }
+.branch-assignment {
+  border: 1px solid #dce3ee;
+  border-radius: 12px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+.branch-assignment legend {
+  padding: 0 6px;
+  font-weight: 700;
+  color: #44536a;
+}
 @media (max-width: 1000px) {
   .supplier-grid {
     grid-template-columns: 1fr 1fr;

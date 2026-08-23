@@ -443,6 +443,29 @@ function useDeleteConfirmation() {
   return [askDelete, deleteDialog];
 }
 
+function useActionConfirmation() {
+  const [pending, setPending] = useState(null);
+  const askConfirm = (options) =>
+    new Promise((resolve) => setPending({ ...options, resolve }));
+  const finish = (accepted) => {
+    pending?.resolve(accepted);
+    setPending(null);
+  };
+  const dialog = pending ? (
+    <ConfirmDialog
+      icon={pending.icon || CheckCircle2}
+      eyebrow={pending.eyebrow || "CONFIRMAR OPERACIÓN"}
+      title={pending.title}
+      message={pending.message}
+      confirmLabel={pending.confirmLabel || "Confirmar"}
+      tone={pending.tone || "primary"}
+      onClose={() => finish(false)}
+      onConfirm={() => finish(true)}
+    />
+  ) : null;
+  return [askConfirm, dialog];
+}
+
 function Login({ onLogin }) {
   return (
     <main className="login-shell">
@@ -1526,25 +1549,204 @@ function BranchManager({
 }
 
 function Purchases({ branch, items, suppliers }) {
-  const [purchases, setPurchases] = useState([]), [form, setForm] = useState(null), [busy, setBusy] = useState(false);
+  const [purchases, setPurchases] = useState([]),
+    [form, setForm] = useState(null),
+    [busy, setBusy] = useState(false);
+  const [askConfirm, actionDialog] = useActionConfirmation();
   const load = async () => {
-    const response = await fetch("/api/v1/purchases/", { credentials: "same-origin" });
+    const response = await fetch("/api/v1/purchases/", {
+      credentials: "same-origin",
+    });
     if (response.ok) setPurchases((await response.json()).purchases || []);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
   const create = async (event) => {
-    event.preventDefault(); setBusy(true);
+    event.preventDefault();
+    const accepted = await askConfirm({
+      icon: ClipboardList,
+      eyebrow: "CONFIRMAR ORDEN",
+      title: "¿Crear esta orden de compra?",
+      message:
+        "La orden quedará registrada y lista para recibir mercadería por lote.",
+      confirmLabel: "Crear orden",
+    });
+    if (!accepted) return;
+    setBusy(true);
     try {
-      const response = await fetch("/api/v1/purchases/", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() }, body: JSON.stringify({ branchId: branch.id, supplierId: form.supplierId, notes: form.notes, items: [{ productId: form.productId, quantity: form.quantity, cost: form.cost }] }) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.detail);
-      setPurchases([data, ...purchases]); setForm(null);
-    } catch (error) { alert(error.message); } finally { setBusy(false); }
+      const response = await fetch("/api/v1/purchases/", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken(),
+        },
+        body: JSON.stringify({
+          branchId: branch.id,
+          supplierId: form.supplierId,
+          notes: form.notes,
+          items: [
+            {
+              productId: form.productId,
+              quantity: form.quantity,
+              cost: form.cost,
+            },
+          ],
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail);
+      setPurchases([data, ...purchases]);
+      setForm(null);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setBusy(false);
+    }
   };
-  return <>
-    <section className="page-heading"><div><p className="eyebrow">ABASTECIMIENTO</p><h1>Órdenes de compra</h1><p>Recepción controlada por lote y vencimiento en {branch.name}.</p></div><button className="button primary" disabled={!items.length || !suppliers.length} onClick={() => setForm({ supplierId: suppliers[0]?.id, productId: items[0]?.id, quantity: 1, cost: items[0]?.buyPrice || 0, notes: "" })}><Plus />Nueva orden</button></section>
-    <section className="table-card"><div className="table-scroll"><table><thead><tr><th>Orden</th><th>Proveedor</th><th>Fecha</th><th>Total</th><th>Estado</th></tr></thead><tbody>{purchases.map((purchase) => <tr key={purchase.id}><td><b>{purchase.number}</b><small>{purchase.user}</small></td><td>{purchase.supplier}</td><td>{new Date(purchase.date).toLocaleDateString("es-EC")}</td><td>{money(purchase.total)}</td><td><span className="status success">{purchase.status}</span></td></tr>)}</tbody></table></div></section>
-    {form && <SimpleModal title="Nueva orden de compra" onClose={() => setForm(null)}><form className="simple-form" onSubmit={create}><div className="form-grid"><label>Proveedor<select value={form.supplierId} onChange={(e) => setForm({...form, supplierId:e.target.value})}>{suppliers.map((x)=><option value={x.id} key={x.id}>{x.name}</option>)}</select></label><label>Medicamento<select value={form.productId} onChange={(e) => setForm({...form, productId:e.target.value})}>{items.map((x)=><option value={x.id} key={x.id}>{x.name}</option>)}</select></label><label>Cantidad<input required min="1" type="number" value={form.quantity} onChange={(e)=>setForm({...form,quantity:e.target.value})}/></label><label>Costo unitario<input required min="0" step="0.01" type="number" value={form.cost} onChange={(e)=>setForm({...form,cost:e.target.value})}/></label><label className="wide">Observación<input value={form.notes} onChange={(e)=>setForm({...form,notes:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Guardando…":"Crear orden"}</button></footer></form></SimpleModal>}
-  </>;
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">ABASTECIMIENTO</p>
+          <h1>Órdenes de compra</h1>
+          <p>Recepción controlada por lote y vencimiento en {branch.name}.</p>
+        </div>
+        <button
+          className="button primary"
+          disabled={!items.length || !suppliers.length}
+          onClick={() =>
+            setForm({
+              supplierId: suppliers[0]?.id,
+              productId: items[0]?.id,
+              quantity: 1,
+              cost: items[0]?.buyPrice || 0,
+              notes: "",
+            })
+          }
+        >
+          <Plus />
+          Nueva orden
+        </button>
+      </section>
+      <section className="table-card">
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Orden</th>
+                <th>Proveedor</th>
+                <th>Fecha</th>
+                <th>Total</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {purchases.map((purchase) => (
+                <tr key={purchase.id}>
+                  <td>
+                    <b>{purchase.number}</b>
+                    <small>{purchase.user}</small>
+                  </td>
+                  <td>{purchase.supplier}</td>
+                  <td>{new Date(purchase.date).toLocaleDateString("es-EC")}</td>
+                  <td>{money(purchase.total)}</td>
+                  <td>
+                    <span className="status success">{purchase.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {form && (
+        <SimpleModal
+          title="Nueva orden de compra"
+          onClose={() => setForm(null)}
+        >
+          <form className="simple-form" onSubmit={create}>
+            <div className="form-grid">
+              <label>
+                Proveedor
+                <select
+                  value={form.supplierId}
+                  onChange={(e) =>
+                    setForm({ ...form, supplierId: e.target.value })
+                  }
+                >
+                  {suppliers.map((x) => (
+                    <option value={x.id} key={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Medicamento
+                <select
+                  value={form.productId}
+                  onChange={(e) =>
+                    setForm({ ...form, productId: e.target.value })
+                  }
+                >
+                  {items.map((x) => (
+                    <option value={x.id} key={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Cantidad
+                <input
+                  required
+                  min="1"
+                  type="number"
+                  value={form.quantity}
+                  onChange={(e) =>
+                    setForm({ ...form, quantity: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Costo unitario
+                <input
+                  required
+                  min="0"
+                  step="0.01"
+                  type="number"
+                  value={form.cost}
+                  onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                />
+              </label>
+              <label className="wide">
+                Observación
+                <input
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                />
+              </label>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setForm(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary" disabled={busy}>
+                {busy ? "Guardando…" : "Crear orden"}
+              </button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
+      {actionDialog}
+    </>
+  );
 }
 
 function Suppliers({ suppliers, setSuppliers }) {
@@ -1724,13 +1926,29 @@ function Sales({ items, setItems, sales, setSales, branch }) {
       const response = await fetch("/api/v1/sales/", {
         method: "POST",
         credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
-        body: JSON.stringify({ branchId: branch.id, productId: product.id, qty, customer: form.customer }),
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken(),
+        },
+        body: JSON.stringify({
+          branchId: branch.id,
+          productId: product.id,
+          qty,
+          customer: form.customer,
+        }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "No se pudo registrar la venta.");
-      setItems(items.map((p) => (p.id === product.id ? { ...p, stock: data.stock } : p)));
-      setSales([data.sale, ...sales.filter((sale) => sale.id !== data.sale.id)]);
+      if (!response.ok)
+        throw new Error(data.detail || "No se pudo registrar la venta.");
+      setItems(
+        items.map((p) =>
+          p.id === product.id ? { ...p, stock: data.stock } : p,
+        ),
+      );
+      setSales([
+        data.sale,
+        ...sales.filter((sale) => sale.id !== data.sale.id),
+      ]);
       setForm(null);
     } catch (error) {
       alert(error.message);
@@ -1910,18 +2128,44 @@ function Alerts({ items, setItems, branch, lotAlerts }) {
       </section>
       <section className="table-card">
         <div className="table-title">
-          <div><h3>Lotes y vencimientos</h3><p>Ordenados por fecha para aplicar FEFO.</p></div>
+          <div>
+            <h3>Lotes y vencimientos</h3>
+            <p>Ordenados por fecha para aplicar FEFO.</p>
+          </div>
         </div>
         <div className="table-scroll">
           <table>
-            <thead><tr><th>Medicamento</th><th>Lote</th><th>Vencimiento</th><th>Unidades</th><th>Estado</th></tr></thead>
-            <tbody>{expiring.map((lot) => (
-              <tr key={lot.id}>
-                <td><b>{lot.product}</b><small>{lot.sku}</small></td>
-                <td>{lot.number}</td><td>{lot.expires}</td><td>{lot.quantity}</td>
-                <td><span className={`status ${lot.status === "EXPIRED" ? "danger" : "warning"}`}>{lot.status === "EXPIRED" ? "Vencido y bloqueado" : "Próximo a vencer"}</span></td>
+            <thead>
+              <tr>
+                <th>Medicamento</th>
+                <th>Lote</th>
+                <th>Vencimiento</th>
+                <th>Unidades</th>
+                <th>Estado</th>
               </tr>
-            ))}</tbody>
+            </thead>
+            <tbody>
+              {expiring.map((lot) => (
+                <tr key={lot.id}>
+                  <td>
+                    <b>{lot.product}</b>
+                    <small>{lot.sku}</small>
+                  </td>
+                  <td>{lot.number}</td>
+                  <td>{lot.expires}</td>
+                  <td>{lot.quantity}</td>
+                  <td>
+                    <span
+                      className={`status ${lot.status === "EXPIRED" ? "danger" : "warning"}`}
+                    >
+                      {lot.status === "EXPIRED"
+                        ? "Vencido y bloqueado"
+                        : "Próximo a vencer"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
       </section>
@@ -1964,22 +2208,468 @@ function Alerts({ items, setItems, branch, lotAlerts }) {
 }
 
 function CashRegister({ branch }) {
-  const [session, setSession] = useState(null), [form, setForm] = useState(null), [busy, setBusy] = useState(false);
-  const load = async () => { const response = await fetch(`/api/v1/cash/session/?branch=${encodeURIComponent(branch.id)}`, { credentials: "same-origin" }); if (response.ok) setSession((await response.json()).session); };
-  useEffect(() => { load(); }, [branch.id]);
-  const send = async (url, payload) => { setBusy(true); try { const response = await fetch(url, { method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()}, body:JSON.stringify(payload) }); const data=await response.json(); if(!response.ok) throw new Error(data.detail); setSession(data.closed ? null : data); setForm(null); } catch(error){ alert(error.message); } finally { setBusy(false); } };
-  return <><section className="page-heading"><div><p className="eyebrow">CONTROL DE EFECTIVO</p><h1>Caja diaria</h1><p>{session ? `Caja abierta · saldo esperado ${money(session.expected)}` : `No hay una caja abierta en ${branch.name}.`}</p></div>{!session && <button className="button primary" onClick={()=>setForm({kind:"open",initial:0})}><Plus/>Abrir caja</button>}</section>
-  {session && <><div className="kpi-grid sales-kpis"><article className="kpi"><span className="kpi-icon"><Wallet/></span><div><small>Saldo inicial</small><b>{money(session.initial)}</b></div></article><article className="kpi"><span className="kpi-icon"><BarChart3/></span><div><small>Saldo esperado</small><b>{money(session.expected)}</b></div></article></div><section className="page-heading"><button className="button secondary" onClick={()=>setForm({kind:"movement",type:"INGRESO",amount:"",notes:""})}>Registrar movimiento</button><button className="button primary" onClick={()=>setForm({kind:"close",declared:session.expected})}>Cerrar caja</button></section><section className="table-card"><div className="table-scroll"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Forma de pago</th><th>Detalle</th><th>Monto</th></tr></thead><tbody>{session.movements.map(x=><tr key={x.id}><td>{new Date(x.date).toLocaleString("es-EC")}</td><td>{x.type}</td><td>{x.payment}</td><td>{x.notes}</td><td><b>{money(x.amount)}</b></td></tr>)}</tbody></table></div></section></>}
-  {form && <SimpleModal title={form.kind==="open"?"Abrir caja":form.kind==="close"?"Cerrar caja":"Movimiento de caja"} onClose={()=>setForm(null)}><form className="simple-form" onSubmit={(e)=>{e.preventDefault(); if(form.kind==="open")send("/api/v1/cash/session/",{branchId:branch.id,initial:form.initial}); else if(form.kind==="close")send(`/api/v1/cash/session/${session.id}/close/`,{declared:form.declared}); else send(`/api/v1/cash/session/${session.id}/movement/`,form);}}><div className="form-grid">{form.kind==="movement"&&<><label>Tipo<select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option value="INGRESO">Ingreso</option><option value="GASTO">Gasto</option><option value="RETIRO">Retiro</option></select></label><label>Detalle<input value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></label></>}<label className="wide">{form.kind==="close"?"Efectivo contado":"Monto"}<input type="number" min="0" step="0.01" required value={form.initial??form.declared??form.amount} onChange={e=>setForm({...form,[form.kind==="open"?"initial":form.kind==="close"?"declared":"amount"]:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Procesando…":"Confirmar"}</button></footer></form></SimpleModal>}</>;
+  const [session, setSession] = useState(null),
+    [form, setForm] = useState(null),
+    [busy, setBusy] = useState(false);
+  const load = async () => {
+    const response = await fetch(
+      `/api/v1/cash/session/?branch=${encodeURIComponent(branch.id)}`,
+      { credentials: "same-origin" },
+    );
+    if (response.ok) setSession((await response.json()).session);
+  };
+  useEffect(() => {
+    load();
+  }, [branch.id]);
+  const send = async (url, payload) => {
+    setBusy(true);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken(),
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail);
+      setSession(data.closed ? null : data);
+      setForm(null);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">CONTROL DE EFECTIVO</p>
+          <h1>Caja diaria</h1>
+          <p>
+            {session
+              ? `Caja abierta · saldo esperado ${money(session.expected)}`
+              : `No hay una caja abierta en ${branch.name}.`}
+          </p>
+        </div>
+        {!session && (
+          <button
+            className="button primary"
+            onClick={() => setForm({ kind: "open", initial: 0 })}
+          >
+            <Plus />
+            Abrir caja
+          </button>
+        )}
+      </section>
+      {session && (
+        <>
+          <div className="kpi-grid sales-kpis">
+            <article className="kpi">
+              <span className="kpi-icon">
+                <Wallet />
+              </span>
+              <div>
+                <small>Saldo inicial</small>
+                <b>{money(session.initial)}</b>
+              </div>
+            </article>
+            <article className="kpi">
+              <span className="kpi-icon">
+                <BarChart3 />
+              </span>
+              <div>
+                <small>Saldo esperado</small>
+                <b>{money(session.expected)}</b>
+              </div>
+            </article>
+          </div>
+          <section className="page-heading">
+            <button
+              className="button secondary"
+              onClick={() =>
+                setForm({
+                  kind: "movement",
+                  type: "INGRESO",
+                  amount: "",
+                  notes: "",
+                })
+              }
+            >
+              Registrar movimiento
+            </button>
+            <button
+              className="button primary"
+              onClick={() =>
+                setForm({ kind: "close", declared: session.expected })
+              }
+            >
+              Cerrar caja
+            </button>
+          </section>
+          <section className="table-card">
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Forma de pago</th>
+                    <th>Detalle</th>
+                    <th>Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {session.movements.map((x) => (
+                    <tr key={x.id}>
+                      <td>{new Date(x.date).toLocaleString("es-EC")}</td>
+                      <td>{x.type}</td>
+                      <td>{x.payment}</td>
+                      <td>{x.notes}</td>
+                      <td>
+                        <b>{money(x.amount)}</b>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+      {form && (
+        <SimpleModal
+          title={
+            form.kind === "open"
+              ? "Abrir caja"
+              : form.kind === "close"
+                ? "Cerrar caja"
+                : "Movimiento de caja"
+          }
+          onClose={() => setForm(null)}
+        >
+          <form
+            className="simple-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (form.kind === "open")
+                send("/api/v1/cash/session/", {
+                  branchId: branch.id,
+                  initial: form.initial,
+                });
+              else if (form.kind === "close")
+                send(`/api/v1/cash/session/${session.id}/close/`, {
+                  declared: form.declared,
+                });
+              else send(`/api/v1/cash/session/${session.id}/movement/`, form);
+            }}
+          >
+            <div className="form-grid">
+              {form.kind === "movement" && (
+                <>
+                  <label>
+                    Tipo
+                    <select
+                      value={form.type}
+                      onChange={(e) =>
+                        setForm({ ...form, type: e.target.value })
+                      }
+                    >
+                      <option value="INGRESO">Ingreso</option>
+                      <option value="GASTO">Gasto</option>
+                      <option value="RETIRO">Retiro</option>
+                    </select>
+                  </label>
+                  <label>
+                    Detalle
+                    <input
+                      value={form.notes}
+                      onChange={(e) =>
+                        setForm({ ...form, notes: e.target.value })
+                      }
+                    />
+                  </label>
+                </>
+              )}
+              <label className="wide">
+                {form.kind === "close" ? "Efectivo contado" : "Monto"}
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  required
+                  value={form.initial ?? form.declared ?? form.amount}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      [form.kind === "open"
+                        ? "initial"
+                        : form.kind === "close"
+                          ? "declared"
+                          : "amount"]: e.target.value,
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setForm(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary" disabled={busy}>
+                {busy ? "Procesando…" : "Confirmar"}
+              </button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
+    </>
+  );
 }
 
 function Transfers({ branch, branches }) {
-  const [rows,setRows]=useState([]),[lots,setLots]=useState([]),[form,setForm]=useState(null),[busy,setBusy]=useState(false);
-  const load=async()=>{const [a,b]=await Promise.all([fetch("/api/v1/transfers/",{credentials:"same-origin"}),fetch(`/api/v1/transfers/lots/?branch=${encodeURIComponent(branch.id)}`,{credentials:"same-origin"})]);if(a.ok)setRows((await a.json()).transfers||[]);if(b.ok)setLots((await b.json()).lots||[]);};
-  useEffect(()=>{load();},[branch.id]);
-  const create=async(e)=>{e.preventDefault();setBusy(true);try{const response=await fetch("/api/v1/transfers/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":csrfToken()},body:JSON.stringify({origin:branch.id,destination:form.destination,items:[{lotId:form.lotId,quantity:form.quantity}]})});const data=await response.json();if(!response.ok)throw new Error(data.detail);setRows([data,...rows]);setForm(null);}catch(error){alert(error.message);}finally{setBusy(false);}};
-  const action=async(row,name)=>{const response=await fetch(`/api/v1/transfers/${row.id}/${name}/`,{method:"POST",credentials:"same-origin",headers:{"X-CSRFToken":csrfToken()}});const data=await response.json();if(!response.ok)return alert(data.detail);setRows(rows.map(x=>x.id===data.id?data:x));};
-  return <><section className="page-heading"><div><p className="eyebrow">TRAZABILIDAD ENTRE SEDES</p><h1>Transferencias</h1><p>Despacho y recepción controlados por lote.</p></div><button className="button primary" disabled={!lots.length||branches.length<2} onClick={()=>setForm({destination:branches.find(x=>x.id!==branch.id)?.id,lotId:lots[0]?.id,quantity:1})}><Plus/>Nueva transferencia</button></section><section className="table-card"><div className="table-scroll"><table><thead><tr><th>Número</th><th>Origen → destino</th><th>Productos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{rows.map(x=><tr key={x.id}><td><b>{x.number}</b><small>{x.user}</small></td><td>{x.origin} → {x.destination}</td><td>{x.items.map(i=>`${i.product} · ${i.lot} (${i.quantity})`).join(", ")}</td><td><span className="status success">{x.status}</span></td><td><div className="row-actions">{x.status==="SOLICITADA"&&<button title="Aprobar" onClick={()=>action(x,"approve")}><CheckCircle2/></button>}{x.status==="APROBADA"&&<button title="Despachar" onClick={()=>action(x,"dispatch")}><Truck/></button>}{x.status==="TRANSITO"&&<button title="Recibir" onClick={()=>action(x,"receive")}><Package/></button>}</div></td></tr>)}</tbody></table></div></section>{form&&<SimpleModal title="Nueva transferencia" onClose={()=>setForm(null)}><form className="simple-form" onSubmit={create}><div className="form-grid"><label>Destino<select value={form.destination} onChange={e=>setForm({...form,destination:e.target.value})}>{branches.filter(x=>x.id!==branch.id&&x.active!==false).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label><label>Lote disponible<select value={form.lotId} onChange={e=>setForm({...form,lotId:e.target.value})}>{lots.map(x=><option key={x.id} value={x.id}>{x.product} · {x.number} · {x.quantity} u.</option>)}</select></label><label className="wide">Cantidad<input type="number" min="1" required value={form.quantity} onChange={e=>setForm({...form,quantity:e.target.value})}/></label></div><footer><button type="button" className="button secondary" onClick={()=>setForm(null)}>Cancelar</button><button className="button primary" disabled={busy}>{busy?"Procesando…":"Solicitar"}</button></footer></form></SimpleModal>}</>;
+  const [rows, setRows] = useState([]),
+    [lots, setLots] = useState([]),
+    [form, setForm] = useState(null),
+    [busy, setBusy] = useState(false);
+  const [askConfirm, actionDialog] = useActionConfirmation();
+  const load = async () => {
+    const [a, b] = await Promise.all([
+      fetch("/api/v1/transfers/", { credentials: "same-origin" }),
+      fetch(`/api/v1/transfers/lots/?branch=${encodeURIComponent(branch.id)}`, {
+        credentials: "same-origin",
+      }),
+    ]);
+    if (a.ok) setRows((await a.json()).transfers || []);
+    if (b.ok) setLots((await b.json()).lots || []);
+  };
+  useEffect(() => {
+    load();
+  }, [branch.id]);
+  const create = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const response = await fetch("/api/v1/transfers/", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken(),
+        },
+        body: JSON.stringify({
+          origin: branch.id,
+          destination: form.destination,
+          items: [{ lotId: form.lotId, quantity: form.quantity }],
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail);
+      setRows([data, ...rows]);
+      setForm(null);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const action = async (row, name) => {
+    const labels = {
+      approve: [
+        "Aprobar transferencia",
+        "La solicitud quedará autorizada para despacho.",
+        "Aprobar",
+      ],
+      dispatch: [
+        "Despachar transferencia",
+        "Las existencias saldrán del origen y quedarán en tránsito.",
+        "Despachar",
+      ],
+      receive: [
+        "Confirmar recepción",
+        "Los lotes ingresarán al inventario de destino.",
+        "Recibir",
+      ],
+    };
+    const detail = labels[name];
+    if (
+      !(await askConfirm({
+        icon: name === "dispatch" ? Truck : Package,
+        eyebrow: "TRANSFERENCIA POR LOTES",
+        title: detail[0],
+        message: detail[1],
+        confirmLabel: detail[2],
+      }))
+    )
+      return;
+    const response = await fetch(`/api/v1/transfers/${row.id}/${name}/`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "X-CSRFToken": csrfToken() },
+    });
+    const data = await response.json();
+    if (!response.ok) return alert(data.detail);
+    setRows(rows.map((x) => (x.id === data.id ? data : x)));
+  };
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">TRAZABILIDAD ENTRE SEDES</p>
+          <h1>Transferencias</h1>
+          <p>Despacho y recepción controlados por lote.</p>
+        </div>
+        <button
+          className="button primary"
+          disabled={!lots.length || branches.length < 2}
+          onClick={() =>
+            setForm({
+              destination: branches.find((x) => x.id !== branch.id)?.id,
+              lotId: lots[0]?.id,
+              quantity: 1,
+            })
+          }
+        >
+          <Plus />
+          Nueva transferencia
+        </button>
+      </section>
+      <section className="table-card">
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Número</th>
+                <th>Origen → destino</th>
+                <th>Productos</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((x) => (
+                <tr key={x.id}>
+                  <td>
+                    <b>{x.number}</b>
+                    <small>{x.user}</small>
+                  </td>
+                  <td>
+                    {x.origin} → {x.destination}
+                  </td>
+                  <td>
+                    {x.items
+                      .map((i) => `${i.product} · ${i.lot} (${i.quantity})`)
+                      .join(", ")}
+                  </td>
+                  <td>
+                    <span className="status success">{x.status}</span>
+                  </td>
+                  <td>
+                    <div className="row-actions">
+                      {x.status === "SOLICITADA" && (
+                        <button
+                          title="Aprobar"
+                          onClick={() => action(x, "approve")}
+                        >
+                          <CheckCircle2 />
+                        </button>
+                      )}
+                      {x.status === "APROBADA" && (
+                        <button
+                          title="Despachar"
+                          onClick={() => action(x, "dispatch")}
+                        >
+                          <Truck />
+                        </button>
+                      )}
+                      {x.status === "TRANSITO" && (
+                        <button
+                          title="Recibir"
+                          onClick={() => action(x, "receive")}
+                        >
+                          <Package />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {form && (
+        <SimpleModal title="Nueva transferencia" onClose={() => setForm(null)}>
+          <form className="simple-form" onSubmit={create}>
+            <div className="form-grid">
+              <label>
+                Destino
+                <select
+                  value={form.destination}
+                  onChange={(e) =>
+                    setForm({ ...form, destination: e.target.value })
+                  }
+                >
+                  {branches
+                    .filter((x) => x.id !== branch.id && x.active !== false)
+                    .map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Lote disponible
+                <select
+                  value={form.lotId}
+                  onChange={(e) => setForm({ ...form, lotId: e.target.value })}
+                >
+                  {lots.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.product} · {x.number} · {x.quantity} u.
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="wide">
+                Cantidad
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={form.quantity}
+                  onChange={(e) =>
+                    setForm({ ...form, quantity: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setForm(null)}
+              >
+                Cancelar
+              </button>
+              <button className="button primary" disabled={busy}>
+                {busy ? "Procesando…" : "Solicitar"}
+              </button>
+            </footer>
+          </form>
+        </SimpleModal>
+      )}
+      {actionDialog}
+    </>
+  );
 }
 
 function UserManagement({ users, setUsers, branches }) {
@@ -2166,12 +2856,27 @@ function UserManagement({ users, setUsers, branches }) {
               {form.role !== "ADMIN" && (
                 <fieldset className="wide branch-assignment">
                   <legend>Farmacias asignadas</legend>
-                  {branches.filter((b) => b.active !== false).map((b) => (
-                    <label className="check-row" key={b.id}>
-                      <input type="checkbox" checked={form.branchIds?.includes(b.id) || false} onChange={(e) => setForm({...form, branchIds: e.target.checked ? [...(form.branchIds || []), b.id] : (form.branchIds || []).filter((id) => id !== b.id)})} />
-                      {b.name}
-                    </label>
-                  ))}
+                  {branches
+                    .filter((b) => b.active !== false)
+                    .map((b) => (
+                      <label className="check-row" key={b.id}>
+                        <input
+                          type="checkbox"
+                          checked={form.branchIds?.includes(b.id) || false}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              branchIds: e.target.checked
+                                ? [...(form.branchIds || []), b.id]
+                                : (form.branchIds || []).filter(
+                                    (id) => id !== b.id,
+                                  ),
+                            })
+                          }
+                        />
+                        {b.name}
+                      </label>
+                    ))}
                 </fieldset>
               )}
             </div>
@@ -2351,7 +3056,9 @@ function AdminReports({ branches, inventories, sales, users, onNotify }) {
       if (dateTo) params.set("to", dateTo);
       if (selectedUser) params.set("user", selectedUser);
       if (movement) params.set("movement", movement);
-      const response = await fetch(`/api/v1/reports/excel/?${params}`, { credentials: "same-origin" });
+      const response = await fetch(`/api/v1/reports/excel/?${params}`, {
+        credentials: "same-origin",
+      });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.detail || "No se pudo generar el reporte.");
@@ -2390,13 +3097,37 @@ function AdminReports({ branches, inventories, sales, users, onNotify }) {
             </option>
           ))}
         </select>
-        <input className="branch-select" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="Fecha inicial" />
-        <input className="branch-select" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="Fecha final" />
-        <select className="branch-select" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
+        <input
+          className="branch-select"
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          title="Fecha inicial"
+        />
+        <input
+          className="branch-select"
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          title="Fecha final"
+        />
+        <select
+          className="branch-select"
+          value={selectedUser}
+          onChange={(e) => setSelectedUser(e.target.value)}
+        >
           <option value="">Todos los usuarios</option>
-          {users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+          {users.map((user) => (
+            <option key={user.id} value={user.id}>
+              {user.name}
+            </option>
+          ))}
         </select>
-        <select className="branch-select" value={movement} onChange={(e) => setMovement(e.target.value)}>
+        <select
+          className="branch-select"
+          value={movement}
+          onChange={(e) => setMovement(e.target.value)}
+        >
           <option value="">Todos los movimientos</option>
           <option value="ENTRADA">Entradas</option>
           <option value="SALIDA">Salidas</option>
@@ -2571,8 +3302,11 @@ export default function AppV2() {
           state = await migrationResponse.json();
         }
         applyState(state);
-        const alertResponse = await fetch("/api/v1/lots/alerts/?days=90", { credentials: "same-origin" });
-        if (alertResponse.ok) setLotAlerts((await alertResponse.json()).lots || []);
+        const alertResponse = await fetch("/api/v1/lots/alerts/?days=90", {
+          credentials: "same-origin",
+        });
+        if (alertResponse.ok)
+          setLotAlerts((await alertResponse.json()).lots || []);
         [
           "pharma-inventories",
           "pharma-branches",
@@ -2626,7 +3360,10 @@ export default function AppV2() {
     return (
       <main className="auth-loading">
         <p>{toast || "No se pudieron preparar los datos del sistema."}</p>
-        <button className="button primary" onClick={() => window.location.reload()}>
+        <button
+          className="button primary"
+          onClick={() => window.location.reload()}
+        >
           Reintentar
         </button>
       </main>
@@ -2635,7 +3372,10 @@ export default function AppV2() {
     return (
       <main className="auth-loading">
         <p>No hay una sucursal activa asignada a esta cuenta.</p>
-        <button className="button primary" onClick={() => window.location.reload()}>
+        <button
+          className="button primary"
+          onClick={() => window.location.reload()}
+        >
           Volver a comprobar
         </button>
       </main>
@@ -2765,7 +3505,12 @@ export default function AppV2() {
               onNotify={setToast}
             />
           ) : (
-            <Alerts items={items} setItems={setItems} branch={branch} lotAlerts={lotAlerts} />
+            <Alerts
+              items={items}
+              setItems={setItems}
+              branch={branch}
+              lotAlerts={lotAlerts}
+            />
           )}
         </main>
       </div>
