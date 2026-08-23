@@ -685,7 +685,6 @@ function CredentialLogin({ onLogin }) {
               <label>
                 <input type="checkbox" /> Recordarme
               </label>
-              <button type="button">¿Olvidaste tu contraseña?</button>
             </div>
             <button className="button primary login-submit" disabled={loading}>
               {loading ? "Validando…" : "Iniciar sesión"}
