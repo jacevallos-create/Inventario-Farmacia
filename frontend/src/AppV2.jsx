@@ -393,6 +393,29 @@ function SuccessToast({ message }) {
   );
 }
 
+function useDeleteConfirmation() {
+  const [pending, setPending] = useState(null);
+  const askDelete = ({ title, message }) =>
+    new Promise((resolve) => setPending({ title, message, resolve }));
+  const finish = (accepted) => {
+    pending?.resolve(accepted);
+    setPending(null);
+  };
+  const deleteDialog = pending ? (
+    <ConfirmDialog
+      icon={Trash2}
+      eyebrow="CONFIRMAR ELIMINACIÓN"
+      title={pending.title}
+      message={pending.message}
+      confirmLabel="Sí, eliminar"
+      tone="danger"
+      onClose={() => finish(false)}
+      onConfirm={() => finish(true)}
+    />
+  ) : null;
+  return [askDelete, deleteDialog];
+}
+
 function Login({ onLogin }) {
   return (
     <main className="login-shell">
@@ -962,6 +985,7 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
     [alert, setAlert] = useState("Todos"),
     [showCode, setShowCode] = useState(true),
     [editing, setEditing] = useState(null);
+  const [askDelete, deleteDialog] = useDeleteConfirmation();
   useEffect(() => setQuery(initialQuery), [initialQuery]);
   const rows = useMemo(
     () =>
@@ -981,9 +1005,14 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
     setItems(items.map((x) => (x.id === m.id ? m : x)));
     setEditing(null);
   };
-  const remove = (p) =>
-    confirm(`¿Eliminar ${p.name}?`) &&
-    setItems(items.filter((x) => x.id !== p.id));
+  const remove = async (p) => {
+    const accepted = await askDelete({
+      title: `¿Eliminar ${p.name}?`,
+      message:
+        "El medicamento se quitará del inventario de esta sucursal. Esta acción no se puede deshacer.",
+    });
+    if (accepted) setItems(items.filter((x) => x.id !== p.id));
+  };
   const restock = (p) => {
     const amount = Number(prompt(`Cantidad para reabastecer ${p.name}:`, 10));
     if (amount > 0)
@@ -1147,6 +1176,7 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
           onSave={save}
         />
       )}
+      {deleteDialog}
     </>
   );
 }
@@ -1290,6 +1320,7 @@ function BranchManager({
   setBranchId,
 }) {
   const [form, setForm] = useState(null);
+  const [askDelete, deleteDialog] = useDeleteConfirmation();
   const save = (e) => {
     e.preventDefault();
     if (form.id)
@@ -1301,15 +1332,19 @@ function BranchManager({
     }
     setForm(null);
   };
-  const remove = (b) => {
+  const remove = async (b) => {
     if (b.id === branchId)
       return alert("No puedes eliminar la sucursal activa.");
     if ((inventories[b.id] || []).length)
       return alert(
         "La sucursal tiene inventario. Trasládalo o elimínalo antes.",
       );
-    if (confirm(`¿Eliminar ${b.name}?`))
-      setBranches(branches.filter((x) => x.id !== b.id));
+    const accepted = await askDelete({
+      title: `¿Eliminar ${b.name}?`,
+      message:
+        "La sucursal y su configuración dejarán de estar disponibles. Esta acción no se puede deshacer.",
+    });
+    if (accepted) setBranches(branches.filter((x) => x.id !== b.id));
   };
   return (
     <>
@@ -1445,6 +1480,7 @@ function BranchManager({
           </form>
         </SimpleModal>
       )}
+      {deleteDialog}
     </>
   );
 }
@@ -1452,6 +1488,7 @@ function BranchManager({
 function Suppliers({ suppliers, setSuppliers }) {
   const [form, setForm] = useState(null),
     [query, setQuery] = useState("");
+  const [askDelete, deleteDialog] = useDeleteConfirmation();
   const rows = suppliers.filter((s) =>
     (s.name + s.taxId + s.contact).toLowerCase().includes(query.toLowerCase()),
   );
@@ -1462,6 +1499,15 @@ function Suppliers({ suppliers, setSuppliers }) {
     else
       setSuppliers([...suppliers, { ...form, id: Date.now(), active: true }]);
     setForm(null);
+  };
+  const remove = async (supplier) => {
+    const accepted = await askDelete({
+      title: `¿Eliminar ${supplier.name}?`,
+      message:
+        "El proveedor se eliminará del directorio. Los medicamentos existentes conservarán sus datos actuales.",
+    });
+    if (accepted)
+      setSuppliers(suppliers.filter((item) => item.id !== supplier.id));
   };
   return (
     <>
@@ -1530,13 +1576,7 @@ function Suppliers({ suppliers, setSuppliers }) {
                 <Edit3 />
                 Editar
               </button>
-              <button
-                className="icon-button delete"
-                onClick={() =>
-                  confirm(`¿Eliminar ${s.name}?`) &&
-                  setSuppliers(suppliers.filter((x) => x.id !== s.id))
-                }
-              >
+              <button className="icon-button delete" onClick={() => remove(s)}>
                 <Trash2 />
               </button>
             </footer>
@@ -1592,6 +1632,7 @@ function Suppliers({ suppliers, setSuppliers }) {
           </form>
         </SimpleModal>
       )}
+      {deleteDialog}
     </>
   );
 }
@@ -1837,6 +1878,7 @@ function Alerts({ items, setItems, branch }) {
 function UserManagement({ users, setUsers, branches }) {
   const [form, setForm] = useState(null),
     [showPassword, setShowPassword] = useState(false);
+  const [askDelete, deleteDialog] = useDeleteConfirmation();
   const save = (e) => {
     e.preventDefault();
     const payload = {
@@ -1852,6 +1894,14 @@ function UserManagement({ users, setUsers, branches }) {
   };
   const edit = (u) =>
     setForm({ ...u, branchId: u.branchIds?.[0] || branches[0]?.id });
+  const remove = async (user) => {
+    const accepted = await askDelete({
+      title: `¿Eliminar el acceso de ${user.name}?`,
+      message:
+        "El usuario perderá el acceso asignado al sistema. Esta acción no se puede deshacer.",
+    });
+    if (accepted) setUsers(users.filter((item) => item.id !== user.id));
+  };
   return (
     <>
       <section className="page-heading">
@@ -1934,10 +1984,7 @@ function UserManagement({ users, setUsers, branches }) {
                         <button
                           title="Eliminar"
                           className="delete"
-                          onClick={() =>
-                            confirm(`¿Eliminar el acceso de ${u.name}?`) &&
-                            setUsers(users.filter((x) => x.id !== u.id))
-                          }
+                          onClick={() => remove(u)}
                         >
                           <Trash2 />
                         </button>
@@ -2049,6 +2096,7 @@ function UserManagement({ users, setUsers, branches }) {
           </form>
         </SimpleModal>
       )}
+      {deleteDialog}
     </>
   );
 }
