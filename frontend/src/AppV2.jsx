@@ -2471,12 +2471,16 @@ export default function AppV2() {
         const sessionResponse = await fetch("/api/v1/auth/session/", {
           credentials: "same-origin",
         });
+        if (!sessionResponse.ok)
+          throw new Error("No se pudo verificar la sesión.");
         const session = await sessionResponse.json();
         if (!session.authenticated) return;
         setCurrentUser(session.user);
         const stateResponse = await fetch("/api/v1/state/", {
           credentials: "same-origin",
         });
+        if (!stateResponse.ok)
+          throw new Error("No se pudieron cargar los datos desde Supabase.");
         let state = await stateResponse.json();
         if (state.empty && session.user.role === "ADMIN") {
           const migrationPayload = {
@@ -2549,9 +2553,27 @@ export default function AppV2() {
     return <main className="auth-loading">Verificando sesión segura…</main>;
   if (!currentUser)
     return <CredentialLogin onLogin={() => window.location.reload()} />;
+  if (!stateReady)
+    return (
+      <main className="auth-loading">
+        <p>{toast || "No se pudieron preparar los datos del sistema."}</p>
+        <button className="button primary" onClick={() => window.location.reload()}>
+          Reintentar
+        </button>
+      </main>
+    );
+  if (!branches.length)
+    return (
+      <main className="auth-loading">
+        <p>No hay una sucursal activa asignada a esta cuenta.</p>
+        <button className="button primary" onClick={() => window.location.reload()}>
+          Volver a comprobar
+        </button>
+      </main>
+    );
   const items = inventories[branchId] || [],
     setItems = (next) => setInventories({ ...inventories, [branchId]: next }),
-    branch = branches.find((b) => b.id === branchId);
+    branch = branches.find((b) => b.id === branchId) || branches[0];
   const saveNew = (m) => {
     setItems([...items, { ...m, id: Date.now() }]);
     setModal(false);
@@ -2581,7 +2603,7 @@ export default function AppV2() {
                 (b) =>
                   b.active !== false &&
                   (currentUser.role === "ADMIN" ||
-                    currentUser.branchIds.includes(b.id)),
+                    currentUser.branchIds?.includes(b.id)),
               )
               .map((b) => (
                 <option value={b.id} key={b.id}>
