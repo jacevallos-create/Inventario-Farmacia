@@ -48,6 +48,22 @@ const csrfToken = () =>
     .split("; ")
     .find((row) => row.startsWith("csrftoken="))
     ?.split("=")[1] || "";
+
+const deleteRemote = async (resource, identifier, branch = "") => {
+  const query = branch ? `?branch=${encodeURIComponent(branch)}` : "";
+  const response = await fetch(
+    `/api/v1/state/${resource}/${encodeURIComponent(identifier)}/${query}`,
+    {
+      method: "DELETE",
+      credentials: "same-origin",
+      headers: { "X-CSRFToken": csrfToken() },
+    },
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "No se pudo eliminar el registro.");
+  }
+};
 const defaultBranches = [
   { id: "central", name: "Farmacia Central", address: "Av. Central 123" },
   { id: "norte", name: "Sucursal Norte", address: "Calle 80 #24-16" },
@@ -1015,7 +1031,14 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
       message:
         "El medicamento se quitará del inventario de esta sucursal. Esta acción no se puede deshacer.",
     });
-    if (accepted) setItems(items.filter((x) => x.id !== p.id));
+    if (accepted) {
+      try {
+        await deleteRemote("inventory", p.id, branchId);
+        setItems(items.filter((x) => x.id !== p.id));
+      } catch (error) {
+        alert(error.message);
+      }
+    }
   };
   const restock = (p) => {
     const amount = Number(prompt(`Cantidad para reabastecer ${p.name}:`, 10));
@@ -1348,7 +1371,14 @@ function BranchManager({
       message:
         "La sucursal y su configuración dejarán de estar disponibles. Esta acción no se puede deshacer.",
     });
-    if (accepted) setBranches(branches.filter((x) => x.id !== b.id));
+    if (accepted) {
+      try {
+        await deleteRemote("branches", b.id);
+        setBranches(branches.filter((x) => x.id !== b.id));
+      } catch (error) {
+        alert(error.message);
+      }
+    }
   };
   return (
     <>
@@ -1510,8 +1540,14 @@ function Suppliers({ suppliers, setSuppliers }) {
       message:
         "El proveedor se eliminará del directorio. Los medicamentos existentes conservarán sus datos actuales.",
     });
-    if (accepted)
-      setSuppliers(suppliers.filter((item) => item.id !== supplier.id));
+    if (accepted) {
+      try {
+        await deleteRemote("suppliers", supplier.id);
+        setSuppliers(suppliers.filter((item) => item.id !== supplier.id));
+      } catch (error) {
+        alert(error.message);
+      }
+    }
   };
   return (
     <>
@@ -1904,7 +1940,14 @@ function UserManagement({ users, setUsers, branches }) {
       message:
         "El usuario perderá el acceso asignado al sistema. Esta acción no se puede deshacer.",
     });
-    if (accepted) setUsers(users.filter((item) => item.id !== user.id));
+    if (accepted) {
+      try {
+        await deleteRemote("users", user.id);
+        setUsers(users.filter((item) => item.id !== user.id));
+      } catch (error) {
+        alert(error.message);
+      }
+    }
   };
   return (
     <>

@@ -65,6 +65,10 @@ class SmokeTests(TestCase):
         response = self.client.put("/api/v1/state/", payload, content_type="application/json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["inventories"]["central"][0]["stock"], 25)
+        medicine_id = response.json()["inventories"]["central"][0]["id"]
+        delete_response = self.client.delete(f"/api/v1/state/inventory/{medicine_id}/?branch=central")
+        self.assertEqual(delete_response.status_code, 204)
+        self.assertEqual(self.client.get("/api/v1/state/").json()["inventories"]["central"], [])
         self.assertEqual(self.client.get("/api/v1/state/").status_code, 200)
 
     def test_admin_redirects_anonymous_user(self):

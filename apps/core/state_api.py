@@ -152,3 +152,38 @@ class SystemStateView(APIView):
                         UsuarioFarmacia.objects.update_or_create(usuario=user, farmacia=pharmacy, defaults={"rol": item.get("role", "INVENTARIO"), "activo": True})
 
         return Response(serialize_state(request))
+
+
+class StateRecordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def delete(self, request, resource, identifier):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"detail": "Solo un administrador puede eliminar registros."}, status=403)
+        if resource == "inventory":
+            branch = request.query_params.get("branch")
+            InventarioFarmacia.objects.filter(
+                farmacia__codigo__iexact=branch, medicamento_id=identifier
+            ).delete()
+        elif resource == "suppliers":
+            Proveedor.objects.filter(pk=identifier).update(activo=False)
+        elif resource == "branches":
+            pharmacy = Farmacia.objects.filter(codigo__iexact=identifier).first()
+            if not pharmacy:
+                return Response(status=404)
+            if pharmacy.inventarios.exists():
+                return Response({"detail": "La sucursal todavía tiene inventario."}, status=409)
+            pharmacy.activo = False
+            pharmacy.save(update_fields=["activo"])
+        elif resource == "users":
+            user = get_user_model().objects.filter(pk=identifier).first()
+            if not user:
+                return Response(status=404)
+            if user.pk == request.user.pk or user.is_superuser:
+                return Response({"detail": "No se puede eliminar este administrador."}, status=409)
+            user.is_active = False
+            user.save(update_fields=["is_active"])
+        else:
+            return Response({"detail": "Tipo de registro desconocido."}, status=404)
+        return Response(status=204)

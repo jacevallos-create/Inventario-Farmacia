@@ -5,7 +5,7 @@ from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .state_api import SystemStateView
+from .state_api import StateRecordView, SystemStateView
 
 
 class HealthView(APIView):
@@ -78,4 +78,5 @@ urlpatterns = [
     path("auth/login/", LoginView.as_view(), name="api-login"),
     path("auth/logout/", LogoutView.as_view(), name="api-logout"),
     path("state/", SystemStateView.as_view(), name="api-state"),
+    path("state/<str:resource>/<str:identifier>/", StateRecordView.as_view(), name="api-state-record"),
 ]
