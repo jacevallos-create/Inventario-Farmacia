@@ -1396,6 +1396,15 @@ td small {
 .confirm-backdrop {
   z-index: 80;
 }
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #08132a66;
+}
 .confirm-dialog {
   position: relative;
   width: min(440px, 100%);

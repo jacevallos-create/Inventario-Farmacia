@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.auditoria.models import AuditLog
-from apps.cajas.models import MovimientoCaja, SesionCaja
+from apps.cajas.models import Caja, MovimientoCaja, SesionCaja
 from apps.farmacias.models import Farmacia
 from apps.inventario.models import InventarioFarmacia, MovimientoInventario
 from apps.lotes.models import Lote
@@ -35,7 +35,7 @@ class SaleCreateView(APIView):
     @transaction.atomic
     def post(self, request):
         branch_code = str(request.data.get("branchId", "")).strip()
-        medicine_id = request.data.get("productId")
+        sku = str(request.data.get("sku") or "").strip()
         try:
             quantity = int(request.data.get("qty", 0))
         except (TypeError, ValueError):
@@ -50,7 +50,7 @@ class SaleCreateView(APIView):
             return Response({"detail": "No tienes acceso a esta sucursal."}, status=403)
 
         inventory = InventarioFarmacia.objects.select_for_update().select_related("medicamento").filter(
-            farmacia=pharmacy, medicamento_id=medicine_id
+            farmacia=pharmacy, medicamento__codigo_interno__iexact=sku
         ).first()
         if not inventory or inventory.stock_actual < quantity:
             return Response({"detail": "No hay existencias suficientes."}, status=409)
@@ -59,13 +59,32 @@ class SaleCreateView(APIView):
             return Response({"detail": "La forma de pago no es válida."}, status=400)
         cash_session = SesionCaja.objects.select_for_update().filter(usuario=request.user, caja__farmacia=pharmacy, cerrada_en__isnull=True).first()
         if payment == "EFECTIVO" and not cash_session:
-            return Response({"detail": "Debes abrir una caja antes de registrar ventas en efectivo."}, status=409)
+            cashbox, _ = Caja.objects.get_or_create(
+                farmacia=pharmacy,
+                nombre="Caja principal",
+            )
+            cash_session = SesionCaja.objects.create(
+                caja=cashbox,
+                usuario=request.user,
+                saldo_inicial=0,
+            )
 
         today = timezone.localdate()
         lots = list(Lote.objects.select_for_update().filter(
-            farmacia=pharmacy, medicamento_id=medicine_id,
+            farmacia=pharmacy, medicamento=inventory.medicamento,
             cantidad_disponible__gt=0, fecha_vencimiento__gte=today,
         ).order_by("fecha_vencimiento", "id"))
+        if not lots and inventory.stock_actual:
+            lot = Lote.objects.create(
+                farmacia=pharmacy,
+                medicamento=inventory.medicamento,
+                numero=f"MIGRADO-{inventory.medicamento.codigo_interno}",
+                fecha_vencimiento=today + timedelta(days=3650),
+                cantidad_inicial=inventory.stock_actual,
+                cantidad_disponible=inventory.stock_actual,
+                costo_unitario=inventory.precio_compra,
+            )
+            lots = [lot]
         if sum(item.cantidad_disponible for item in lots) < quantity:
             return Response({"detail": "No hay lotes vigentes suficientes. Los lotes vencidos están bloqueados."}, status=409)
 

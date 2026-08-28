@@ -62,6 +62,10 @@ def serialize_state(request):
         "contact": supplier.contacto, "phone": supplier.telefono, "email": supplier.correo,
         "city": supplier.ciudad, "active": supplier.activo,
     } for supplier in Proveedor.objects.filter(activo=True).order_by("id")]
+    medicines = [{
+        "id": medicine.id, "name": medicine.nombre_comercial,
+        "sku": medicine.codigo_interno, "buyPrice": 0,
+    } for medicine in Medicamento.objects.filter(activo=True).order_by("nombre_comercial")]
     sales = [{
         "id": sale.referencia_cliente, "branchId": sale.farmacia.codigo.lower(),
         "product": sale.medicamento.nombre_comercial, "sku": sale.medicamento.codigo_interno,
@@ -78,7 +82,7 @@ def serialize_state(request):
                 "password": "", "role": "ADMIN" if user.is_staff else (assignments[0].rol if assignments else "INVENTARIO"),
                 "branchIds": [item.farmacia.codigo.lower() for item in assignments], "active": user.is_active,
             })
-    return {"branches": branches, "inventories": inventories, "suppliers": suppliers, "sales": sales, "users": users}
+    return {"branches": branches, "inventories": inventories, "medicines": medicines, "suppliers": suppliers, "sales": sales, "users": users}
 
 
 class SystemStateView(APIView):

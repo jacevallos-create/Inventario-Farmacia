@@ -46,6 +46,7 @@ const money = (n) =>
     currency: "USD",
     minimumFractionDigits: 2,
   }).format(n || 0);
+const roundToCents = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const csrfToken = () =>
   document.cookie
     .split("; ")
@@ -248,9 +249,7 @@ const loadInventories = () => {
         presentation: p.presentation || "Tabletas",
         buyPrice: Number(p.buyPrice ?? p.price ?? 0),
         margin: Number(p.margin ?? 30),
-        sellPrice: Number(
-          p.sellPrice ?? Math.round(Number(p.price || 0) * 1.3),
-        ),
+        sellPrice: Number(p.sellPrice ?? roundToCents(Number(p.price || 0) * 1.3)),
         min: Number(p.min || 0),
         stock: Number(p.stock || 0),
       })),
@@ -438,7 +437,7 @@ function SuccessToast({ message }) {
 
 function NoticeDialog({ message, onClose }) {
   return (
-    <div className="confirm-overlay" role="presentation">
+    <div className="modal-backdrop confirm-overlay" role="presentation">
       <section className="confirm-dialog" role="alertdialog" aria-modal="true">
         <span className="confirm-icon primary">
           <ShieldCheck />
@@ -500,162 +499,6 @@ function useActionConfirmation() {
     />
   ) : null;
   return [askConfirm, dialog];
-}
-
-function Login({ onLogin }) {
-  return (
-    <main className="login-shell">
-      <section className="login-brand">
-        <div className="brand">
-          <span>
-            <FlaskConical size={23} />
-          </span>
-          PharmaSys
-        </div>
-        <div>
-          <p className="eyebrow light">INVENTARIO MULTI-SUCURSAL</p>
-          <h1>
-            Medicamentos disponibles.
-            <br />
-            Decisiones más seguras.
-          </h1>
-          <p>
-            Controla existencias, precios y alertas de todas tus farmacias desde
-            un solo lugar.
-          </p>
-          <div className="login-stats">
-            <div>
-              <b>3</b>
-              <small>Sucursales</small>
-            </div>
-            <div>
-              <b>24/7</b>
-              <small>Monitoreo</small>
-            </div>
-            <div>
-              <b>100%</b>
-              <small>Trazabilidad</small>
-            </div>
-          </div>
-        </div>
-        <small>Gestión farmacéutica segura y centralizada</small>
-      </section>
-      <section className="login-panel">
-        <div className="login-card">
-          <div className="brand mobile">
-            <span>
-              <FlaskConical size={21} />
-            </span>
-            PharmaSys
-          </div>
-          <p className="eyebrow">BIENVENIDO</p>
-          <h2>Inicia sesión en tu cuenta</h2>
-          <p>Usa tu cuenta corporativa de Google para acceder al sistema.</p>
-          <button className="google-button" onClick={onLogin}>
-            <img
-              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-              alt=""
-            />
-            Continuar con Google
-          </button>
-          <div className="security-note">
-            Acceso protegido mediante Google OAuth 2.0
-          </div>
-          <p className="legal">
-            Al continuar, aceptas nuestros <a>Términos de servicio</a> y la{" "}
-            <a>Política de privacidad</a>.
-          </p>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function PharmaLogin({ onLogin, branches }) {
-  const [branchId, setBranchId] = useState(branches[0]?.id || "central");
-  return (
-    <main className="login-shell">
-      <section className="login-brand">
-        <div className="brand">
-          <span>
-            <FlaskConical size={23} />
-          </span>
-          PharmaSys
-        </div>
-        <div>
-          <p className="eyebrow light">GESTIÓN FARMACÉUTICA MULTI-SUCURSAL</p>
-          <h1>
-            Una operación clara.
-            <br />
-            Todas tus farmacias.
-          </h1>
-          <p>
-            Inventario, ventas, proveedores y reportes en un solo espacio de
-            trabajo seguro.
-          </p>
-          <div className="login-stats">
-            <div>
-              <b>{branches.length}</b>
-              <small>Sucursales</small>
-            </div>
-            <div>
-              <b>24/7</b>
-              <small>Monitoreo</small>
-            </div>
-            <div>
-              <b>100%</b>
-              <small>Trazabilidad</small>
-            </div>
-          </div>
-        </div>
-        <small>PharmaSys · Gestión segura y centralizada</small>
-      </section>
-      <section className="login-panel">
-        <div className="login-card">
-          <div className="brand mobile">
-            <span>
-              <FlaskConical size={21} />
-            </span>
-            PharmaSys
-          </div>
-          <p className="eyebrow">BIENVENIDO</p>
-          <h2>Accede a PharmaSys</h2>
-          <p>
-            Selecciona tu sucursal inicial y continúa con tu cuenta corporativa.
-          </p>
-          <label className="login-branch">
-            Sucursal
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-            >
-              {branches
-                .filter((b) => b.active !== false)
-                .map((b) => (
-                  <option value={b.id} key={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <button className="google-button" onClick={() => onLogin(branchId)}>
-            <img
-              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-              alt=""
-            />
-            Continuar con Google
-          </button>
-          <div className="security-note">
-            Acceso protegido mediante Google OAuth 2.0
-          </div>
-          <p className="legal">
-            Al continuar, aceptas nuestros <a>Términos de servicio</a> y la{" "}
-            <a>Política de privacidad</a>.
-          </p>
-        </div>
-      </section>
-    </main>
-  );
 }
 
 function CredentialLogin({ onLogin }) {
@@ -776,25 +619,6 @@ function CredentialLogin({ onLogin }) {
               {loading ? "Validando…" : "Iniciar sesión"}
             </button>
           </form>
-          <div className="login-divider">
-            <span>O continúa con</span>
-          </div>
-          <button
-            className="google-button compact"
-            onClick={() =>
-              window.location.assign("/accounts/google/login/?process=login")
-            }
-          >
-            <img
-              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-              alt=""
-            />
-            Continuar con Google
-          </button>
-          <p className="legal">
-            Al continuar, aceptas los <a>Términos</a> y la{" "}
-            <a>Política de privacidad</a>.
-          </p>
         </div>
       </section>
     </main>
@@ -819,7 +643,7 @@ function MedicineModal({ medicine, onClose, onSave }) {
   const [barcodeEnabled, setBarcodeEnabled] = useState(
     Boolean(medicine?.barcode),
   );
-  const sellPrice = Math.round(
+  const sellPrice = roundToCents(
     Number(form.buyPrice || 0) * (1 + Number(form.margin || 0) / 100),
   );
   const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -940,6 +764,7 @@ function MedicineModal({ medicine, onClose, onSave }) {
               <input
                 type="number"
                 min="0"
+                step="0.01"
                 name="buyPrice"
                 value={form.buyPrice}
                 onChange={change}
@@ -951,6 +776,7 @@ function MedicineModal({ medicine, onClose, onSave }) {
               <input
                 type="number"
                 min="0"
+                step="0.01"
                 name="margin"
                 value={form.margin}
                 onChange={change}
@@ -1082,7 +908,7 @@ function Inventory({ items, setItems, branchId, onAdd, initialQuery = "" }) {
           (presentation === "Todas" || p.presentation === presentation) &&
           (alert === "Todos" || getStatus(p)[0] === alert),
       ),
-    [items, query, category, lab, presentation, alert],
+        [items, query, category, lab, presentation, alert],
   );
   const save = (m) => {
     setItems(items.map((x) => (x.id === m.id ? m : x)));
@@ -1640,19 +1466,27 @@ function BranchManager({
   );
 }
 
-function Purchases({ branch, items, suppliers }) {
+function Purchases({ branch, items, medicines, suppliers, canCreate }) {
   const [purchases, setPurchases] = useState([]),
     [form, setForm] = useState(null),
     [receiving, setReceiving] = useState(null),
     [supplierReturn, setSupplierReturn] = useState(null),
     [cancellation, setCancellation] = useState(null),
+    [loadError, setLoadError] = useState(""),
     [busy, setBusy] = useState(false);
   const [askConfirm, actionDialog] = useActionConfirmation();
   const load = async () => {
-    const response = await fetch("/api/v1/purchases/", {
-      credentials: "same-origin",
-    });
-    if (response.ok) setPurchases((await response.json()).purchases || []);
+    try {
+      const response = await fetch("/api/v1/purchases/", {
+        credentials: "same-origin",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "No se pudieron cargar las órdenes.");
+      setPurchases(data.purchases || []);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error.message);
+    }
   };
   useEffect(() => {
     load();
@@ -1703,32 +1537,37 @@ function Purchases({ branch, items, suppliers }) {
   const receive = async (event) => {
     event.preventDefault();
     setBusy(true);
-    const response = await fetch(
-      `/api/v1/purchases/${receiving.purchase.id}/receive/`,
-      {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": csrfToken(),
+    try {
+      const response = await fetch(
+        `/api/v1/purchases/${receiving.purchase.id}/receive/`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken(),
+          },
+          body: JSON.stringify({
+            items: [
+              {
+                detailId: receiving.detailId,
+                quantity: receiving.quantity,
+                lot: receiving.lot,
+                expires: receiving.expires,
+              },
+            ],
+          }),
         },
-        body: JSON.stringify({
-          items: [
-            {
-              detailId: receiving.detailId,
-              quantity: receiving.quantity,
-              lot: receiving.lot,
-              expires: receiving.expires,
-            },
-          ],
-        }),
-      },
-    );
-    const data = await response.json();
-    setBusy(false);
-    if (!response.ok) return systemNotice(data.detail);
-    setPurchases(purchases.map((x) => (x.id === data.id ? data : x)));
-    setReceiving(null);
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "No se pudo confirmar la recepción.");
+      setPurchases(purchases.map((x) => (x.id === data.id ? data : x)));
+      setReceiving(null);
+    } catch (error) {
+      systemNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
   };
   const cancelPurchase = async (event) => {
     event.preventDefault();
@@ -1794,8 +1633,12 @@ function Purchases({ branch, items, suppliers }) {
     const data = await response.json();
     setBusy(false);
     if (!response.ok) return systemNotice(data.detail);
+    await load();
     setSupplierReturn(null);
   };
+  const selectedReturnLot = supplierReturn?.purchase.receipts?.find(
+    (item) => item.lotId === Number(supplierReturn.lotId),
+  );
   return (
     <>
       <section className="page-heading">
@@ -1806,13 +1649,13 @@ function Purchases({ branch, items, suppliers }) {
         </div>
         <button
           className="button primary"
-          disabled={!items.length || !suppliers.length}
+          disabled={!canCreate || !medicines.length || !suppliers.length}
           onClick={() =>
             setForm({
               supplierId: suppliers[0]?.id,
-              productId: items[0]?.id,
+              productId: medicines[0]?.id,
               quantity: 1,
-              cost: items[0]?.buyPrice || 0,
+              cost: medicines[0]?.buyPrice || 0,
               notes: "",
             })
           }
@@ -1828,6 +1671,7 @@ function Purchases({ branch, items, suppliers }) {
               <tr>
                 <th>Orden</th>
                 <th>Proveedor</th>
+                <th>Lote / medicamento</th>
                 <th>Fecha</th>
                 <th>Total</th>
                 <th>Estado</th>
@@ -1842,10 +1686,23 @@ function Purchases({ branch, items, suppliers }) {
                     <small>{purchase.user}</small>
                   </td>
                   <td>{purchase.supplier}</td>
+                  <td>
+                    {purchase.receipts?.length ? (
+                      <div className="purchase-lots">
+                        {[...new Map(purchase.receipts.map((item) => [item.lotId, item])).values()].map((item) => (
+                          <span key={item.lotId}>{item.product || item.sku} · {item.lot || "sin lote"}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <small>Sin recepción</small>
+                    )}
+                  </td>
                   <td>{new Date(purchase.date).toLocaleDateString("es-EC")}</td>
                   <td>{money(purchase.total)}</td>
                   <td>
-                    <span className="status success">{purchase.status}</span>
+                    <span className={`status ${purchase.displayStatus === "DEVOLUCION" ? "warning" : "success"}`}>
+                      {purchase.displayStatus || purchase.status}
+                    </span>
                   </td>
                   <td>
                     <div className="row-actions">
@@ -1873,14 +1730,18 @@ function Purchases({ branch, items, suppliers }) {
                       {purchase.receipts?.length > 0 && (
                         <button
                           title="Devolver al proveedor"
-                          onClick={() =>
+                          onClick={() => {
+                            const receipt =
+                              purchase.receipts.find(
+                                (item) => item.available > 0,
+                              ) || purchase.receipts[0];
                             setSupplierReturn({
                               purchase,
-                              lotId: purchase.receipts[0].lotId,
+                              lotId: receipt.lotId,
                               quantity: 1,
-                              reason: "",
-                            })
-                          }
+                              reason: "Devolución al proveedor",
+                            });
+                          }}
                         >
                           <Truck />
                         </button>
@@ -1904,6 +1765,11 @@ function Purchases({ branch, items, suppliers }) {
           </table>
         </div>
       </section>
+      {loadError && <div className="login-error">{loadError}</div>}
+      {!canCreate && <div className="empty compact"><b>Sin permiso para crear órdenes</b><p>Solicita el rol de Farmacéutico o Inventario.</p></div>}
+      {canCreate && (!medicines.length || !suppliers.length) && (
+        <div className="empty compact"><b>Faltan datos para crear la orden</b><p>Registra al menos un medicamento activo y un proveedor.</p></div>
+      )}
       {form && (
         <SimpleModal
           title="Nueva orden de compra"
@@ -1934,7 +1800,7 @@ function Purchases({ branch, items, suppliers }) {
                     setForm({ ...form, productId: e.target.value })
                   }
                 >
-                  {items.map((x) => (
+                  {medicines.map((x) => (
                     <option value={x.id} key={x.id}>
                       {x.name}
                     </option>
@@ -1998,9 +1864,16 @@ function Purchases({ branch, items, suppliers }) {
                 Producto
                 <select
                   value={receiving.detailId}
-                  onChange={(e) =>
-                    setReceiving({ ...receiving, detailId: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const detail = receiving.purchase.items.find(
+                      (item) => item.id === Number(e.target.value),
+                    );
+                    setReceiving({
+                      ...receiving,
+                      detailId: e.target.value,
+                      quantity: detail ? detail.ordered - detail.received : 1,
+                    });
+                  }}
                 >
                   {receiving.purchase.items
                     .filter((x) => x.received < x.ordered)
@@ -2016,6 +1889,14 @@ function Purchases({ branch, items, suppliers }) {
                 <input
                   type="number"
                   min="1"
+                  max={
+                    receiving.purchase.items.find(
+                      (item) => item.id === Number(receiving.detailId),
+                    )?.ordered -
+                      receiving.purchase.items.find(
+                        (item) => item.id === Number(receiving.detailId),
+                      )?.received
+                  }
                   required
                   value={receiving.quantity}
                   onChange={(e) =>
@@ -2037,6 +1918,9 @@ function Purchases({ branch, items, suppliers }) {
                 Vencimiento
                 <input
                   type="date"
+                  min={new Date(Date.now() + 86400000)
+                    .toISOString()
+                    .slice(0, 10)}
                   required
                   value={receiving.expires}
                   onChange={(e) =>
@@ -2075,21 +1959,28 @@ function Purchases({ branch, items, suppliers }) {
                     setSupplierReturn({
                       ...supplierReturn,
                       lotId: e.target.value,
+                      quantity: 1,
                     })
                   }
                 >
                   {supplierReturn.purchase.receipts.map((x) => (
                     <option key={x.lotId} value={x.lotId}>
-                      {x.product} · {x.lot}
+                      {x.product || x.sku} · Lote {x.lot || "sin número"} · {x.available || 0} disponibles
                     </option>
                   ))}
                 </select>
+                {selectedReturnLot?.available < 1 && (
+                  <small className="field-error">
+                    Este lote no tiene unidades disponibles para devolver.
+                  </small>
+                )}
               </label>
               <label>
                 Cantidad
                 <input
                   type="number"
                   min="1"
+                  max={selectedReturnLot?.available || 1}
                   required
                   value={supplierReturn.quantity}
                   onChange={(e) =>
@@ -2103,7 +1994,6 @@ function Purchases({ branch, items, suppliers }) {
               <label className="wide">
                 Motivo
                 <input
-                  required
                   value={supplierReturn.reason}
                   onChange={(e) =>
                     setSupplierReturn({
@@ -2122,7 +2012,10 @@ function Purchases({ branch, items, suppliers }) {
               >
                 Cancelar
               </button>
-              <button className="button primary" disabled={busy}>
+              <button
+                className="button primary"
+                disabled={busy || !selectedReturnLot || selectedReturnLot.available < 1}
+              >
                 Continuar
               </button>
             </footer>
@@ -2330,12 +2223,14 @@ function Sales({ items, setItems, sales, setSales, branch }) {
     [saving, setSaving] = useState(false);
   const [askConfirm, adjustmentDialog] = useActionConfirmation();
   const total = form
-    ? Number(form.qty || 0) *
-      (items.find((p) => p.id === Number(form.productId))?.sellPrice || 0)
+    ? roundToCents(
+        Number(form.qty || 0) *
+          (items.find((p) => p.sku === form.sku)?.sellPrice || 0),
+      )
     : 0;
   const save = async (e) => {
     e.preventDefault();
-    const product = items.find((p) => p.id === Number(form.productId)),
+    const product = items.find((p) => p.sku === form.sku),
       qty = Number(form.qty);
     if (!product || qty < 1) return;
     if (qty > product.stock)
@@ -2351,7 +2246,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
         },
         body: JSON.stringify({
           branchId: branch.id,
-          productId: product.id,
+          sku: product.sku,
           qty,
           customer: form.customer,
           payment: form.payment,
@@ -2362,7 +2257,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
         throw new Error(data.detail || "No se pudo registrar la venta.");
       setItems(
         items.map((p) =>
-          p.id === product.id ? { ...p, stock: data.stock } : p,
+          p.sku === product.sku ? { ...p, stock: data.stock } : p,
         ),
       );
       setSales([
@@ -2444,7 +2339,7 @@ function Sales({ items, setItems, sales, setSales, branch }) {
           disabled={!items.length}
           onClick={() =>
             setForm({
-              productId: items[0]?.id,
+              sku: items[0]?.sku || "",
               qty: 1,
               customer: "",
               payment: "EFECTIVO",
@@ -2559,15 +2454,15 @@ function Sales({ items, setItems, sales, setSales, branch }) {
               <label className="wide">
                 Medicamento
                 <select
-                  value={form.productId}
+                  value={form.sku}
                   onChange={(e) =>
-                    setForm({ ...form, productId: e.target.value })
+                    setForm({ ...form, sku: e.target.value })
                   }
                 >
                   {items
                     .filter((p) => p.stock > 0)
                     .map((p) => (
-                      <option value={p.id} key={p.id}>
+                      <option value={p.sku} key={p.sku}>
                         {p.name} · {p.stock} disponibles
                       </option>
                     ))}
@@ -3855,6 +3750,7 @@ export default function AppV2() {
       () => localStorage.getItem("pharma-branch") || "central",
     ),
     [inventories, setInventories] = useState(loadInventories),
+    [medicines, setMedicines] = useState([]),
     [suppliers, setSuppliers] = useState(
       () =>
         JSON.parse(localStorage.getItem("pharma-suppliers") || "null") ||
@@ -3880,6 +3776,7 @@ export default function AppV2() {
     const applyState = (state) => {
       setBranches(state.branches || []);
       setInventories(state.inventories || {});
+      setMedicines(state.medicines || []);
       setSuppliers(state.suppliers || []);
       setSales(state.sales || []);
       if (state.users?.length) setUsers(state.users);
@@ -4099,7 +3996,21 @@ export default function AppV2() {
           ) : active === "Proveedores" ? (
             <Suppliers suppliers={suppliers} setSuppliers={setSuppliers} />
           ) : active === "Compras" ? (
-            <Purchases branch={branch} items={items} suppliers={suppliers} />
+            <Purchases
+              branch={branch}
+              items={items}
+              medicines={medicines.map((medicine) => ({
+                ...medicine,
+                buyPrice:
+                  items.find((item) => item.id === medicine.id)?.buyPrice ||
+                  medicine.buyPrice,
+              }))}
+              suppliers={suppliers}
+              canCreate={
+                isAdminRole(currentUser.role) ||
+                ["FARMACEUTICO", "INVENTARIO"].includes(currentUser.role)
+              }
+            />
           ) : active === "Caja" ? (
             <CashRegister branch={branch} />
           ) : active === "Transferencias" ? (
